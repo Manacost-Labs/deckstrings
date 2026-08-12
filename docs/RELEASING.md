@@ -301,11 +301,20 @@ gh attestation verify path/to/artifact \
   --repo Manacost-Labs/hearthstone-deckstrings
 ```
 
-Compare downloaded artifact SHA-256 values with the checksums produced by the
-release workflow. Registry-native provenance is separate: inspect npm
-provenance and PyPI publish attestations on their registry pages. NuGet OIDC
-proves the publishing identity, while GitHub attestations bind release
-artifacts to this workflow.
+Download all package assets, `sbom.spdx.json`, and `SHA256SUMS` from the same
+GitHub Release into one directory, then verify them directly:
+
+```bash
+shasum -a 256 -c SHA256SUMS
+```
+
+The SPDX 2.3 SBOM must describe four packages and the six npm, PyPI, NuGet,
+symbols, and Composer distribution files. Release assembly rejects missing,
+empty, duplicate-name, and unexpected artifacts before publishing.
+
+Registry-native provenance is separate: inspect npm provenance and PyPI publish
+attestations on their registry pages. NuGet OIDC proves the publishing
+identity, while GitHub attestations bind release artifacts to this workflow.
 
 ## Partial or failed release
 
