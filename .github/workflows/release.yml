@@ -249,7 +249,19 @@ jobs:
       - run: composer validate --strict --check-lock --no-plugins
       - run: composer install --no-interaction --prefer-dist --no-progress --no-scripts --no-plugins
       - run: composer check
-      - run: composer audit --locked --no-plugins
+      - name: Audit Composer dependencies
+        run: |
+          for attempt in 1 2 3; do
+            if composer audit --locked --no-plugins; then
+              exit 0
+            else
+              status=$?
+            fi
+            if [[ "${status}" -ne 100 || "${attempt}" -eq 3 ]]; then
+              exit "${status}"
+            fi
+            sleep "$((attempt * 5))"
+          done
 
   build-composer:
     name: Build Composer artifact
