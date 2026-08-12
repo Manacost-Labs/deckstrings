@@ -2,8 +2,6 @@ import { DeckstringError } from "./errors";
 import type { DeckDefinition } from "./types";
 
 const MAX_EXPORT_UTF8_LENGTH = 1_500_000;
-const EXPORT_WHITESPACE =
-	/^[\u0009-\u000d\u0020\u0085\u00a0\u1680\u2000-\u200a\u2028\u2029\u202f\u205f\u3000]+|[\u0009-\u000d\u0020\u0085\u00a0\u1680\u2000-\u200a\u2028\u2029\u202f\u205f\u3000]+$/g;
 
 export interface ExportMetadata {
 	name?: string;
@@ -42,8 +40,37 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 	return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
+function isExportWhitespace(codeUnit: number): boolean {
+	return (
+		(codeUnit >= 0x0009 && codeUnit <= 0x000d) ||
+		codeUnit === 0x0020 ||
+		codeUnit === 0x0085 ||
+		codeUnit === 0x00a0 ||
+		codeUnit === 0x1680 ||
+		(codeUnit >= 0x2000 && codeUnit <= 0x200a) ||
+		codeUnit === 0x2028 ||
+		codeUnit === 0x2029 ||
+		codeUnit === 0x202f ||
+		codeUnit === 0x205f ||
+		codeUnit === 0x3000
+	);
+}
+
 function trimExportWhitespace(value: string): string {
-	return value.replace(EXPORT_WHITESPACE, "");
+	let start = 0;
+	while (
+		start < value.length &&
+		isExportWhitespace(value.charCodeAt(start))
+	) {
+		start++;
+	}
+
+	let end = value.length;
+	while (end > start && isExportWhitespace(value.charCodeAt(end - 1))) {
+		end--;
+	}
+
+	return value.slice(start, end);
 }
 
 function isWellFormedUnicode(value: string): boolean {
