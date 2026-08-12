@@ -84,6 +84,7 @@ jobs:
       - run: uv sync --project packages/python --locked --all-extras
       - run: uv run --project packages/python --locked --all-extras python scripts/validate_fixtures.py
       - run: python scripts/check_versions.py
+      - run: python -m unittest discover -s scripts/tests -p 'test_*.py'
 
   php:
     runs-on: ubuntu-latest
