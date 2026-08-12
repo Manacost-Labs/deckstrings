@@ -1,0 +1,45 @@
+name: Bug report
+description: Report a reproducible codec or compatibility problem
+title: "[Bug]: "
+labels:
+  - bug
+body:
+  - type: dropdown
+    id: package
+    attributes:
+      label: Package
+      options:
+        - JavaScript / TypeScript
+        - PHP
+        - Python
+        - .NET / C#
+        - Shared specification
+    validations:
+      required: true
+  - type: input
+    id: runtime
+    attributes:
+      label: Runtime version
+      placeholder: Node 24, PHP 8.4, Python 3.13, or .NET 10
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Reproduction
+      description: Include a minimal example and deckstring if it is safe to share.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+      description: Include the machine-readable error code when available.
+    validations:
+      required: true

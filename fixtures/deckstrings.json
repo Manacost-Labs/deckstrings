@@ -22,6 +22,16 @@
       }
     },
     {
+      "name": "multi-hero-numeric-order",
+      "deckstring": "AAEBAgIKAQQBAwAA",
+      "deck": {
+        "format": 1,
+        "heroes": [2, 10],
+        "cards": [[3, 2], [4, 1]],
+        "sideboardCards": []
+      }
+    },
+    {
       "name": "classic-basic",
       "deckstring": "AAEDAQcBBAMBAgMAAA==",
       "deck": {
@@ -71,6 +81,88 @@
         "cards": [[1, 2], [2, 2], [3, 2], [4, 1]],
         "sideboardCards": []
       }
+    }
+  ],
+  "invalid": [
+    {
+      "name": "empty-input",
+      "deckstring": "",
+      "errorCode": "invalid_input"
+    },
+    {
+      "name": "malformed-base64",
+      "deckstring": "not-base64!",
+      "errorCode": "invalid_base64"
+    },
+    {
+      "name": "base64-with-whitespace",
+      "deckstring": "AA = =",
+      "errorCode": "invalid_base64"
+    },
+    {
+      "name": "missing-version",
+      "deckstring": "AA==",
+      "errorCode": "unexpected_end"
+    },
+    {
+      "name": "invalid-reserved-byte",
+      "deckstring": "AQEB",
+      "errorCode": "invalid_reserved"
+    },
+    {
+      "name": "unsupported-version",
+      "deckstring": "AAIB",
+      "errorCode": "unsupported_version"
+    },
+    {
+      "name": "unsupported-format",
+      "deckstring": "AAEF",
+      "errorCode": "unsupported_format"
+    },
+    {
+      "name": "zero-hero-count",
+      "deckstring": "AAEBAAAAAAA=",
+      "errorCode": "invalid_count"
+    },
+    {
+      "name": "zero-hero-id",
+      "deckstring": "AAEBAQAAAAAA",
+      "errorCode": "invalid_id"
+    },
+    {
+      "name": "truncated-varint",
+      "deckstring": "AIA=",
+      "errorCode": "invalid_varint"
+    },
+    {
+      "name": "oversized-varint",
+      "deckstring": "AP////8I",
+      "errorCode": "invalid_varint"
+    },
+    {
+      "name": "item-group-limit",
+      "deckstring": "AAEBkU4=",
+      "errorCode": "limit_exceeded"
+    },
+    {
+      "name": "zero-card-count",
+      "deckstring": "AAEBAQcAAAEBAAA=",
+      "errorCode": "invalid_count"
+    },
+    {
+      "name": "invalid-sideboard-marker",
+      "deckstring": "AAEBAQcAAAAC",
+      "errorCode": "invalid_sideboard"
+    },
+    {
+      "name": "zero-sideboard-owner",
+      "deckstring": "AAEBAQcAAAABAQUAAAA=",
+      "errorCode": "invalid_id"
+    },
+    {
+      "name": "trailing-data",
+      "deckstring": "AAEBAQcAAAAA/w==",
+      "errorCode": "trailing_data"
     }
   ]
 }

@@ -30,6 +30,24 @@ internal static class Program
             checkedFixtures++;
         }
 
+        foreach (var fixture in document.RootElement.GetProperty("invalid").EnumerateArray())
+        {
+            var name = fixture.GetProperty("name").GetString() ?? "unnamed";
+            var deckstring = fixture.GetProperty("deckstring").GetString() ?? string.Empty;
+            var expectedCode = fixture.GetProperty("errorCode").GetString()
+                ?? throw new InvalidOperationException($"{name} has no error code.");
+            try
+            {
+                Deckstrings.Decode(deckstring);
+                throw new InvalidOperationException($"{name} did not throw.");
+            }
+            catch (DeckstringException error)
+            {
+                AssertEqual(expectedCode, error.ErrorCode, $"{name} error code");
+            }
+            checkedFixtures++;
+        }
+
         Console.WriteLine($".NET compatibility fixtures passed: {checkedFixtures}");
         return 0;
     }

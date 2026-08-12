@@ -4,17 +4,17 @@
 const fs = require("fs");
 const path = require("path");
 const { expect } = require("chai");
-const { decode, encode } = require("../dist/index");
+const { DeckstringError, decode, encode } = require("../dist/index");
 
 const fixtures = JSON.parse(
 	fs.readFileSync(
 		path.join(__dirname, "../fixtures/deckstrings.json"),
 		"utf8"
 	)
-).valid;
+);
 
 describe("cross-language compatibility fixtures", () => {
-	for (const fixture of fixtures) {
+	for (const fixture of fixtures.valid) {
 		it(`${fixture.name} decodes to the canonical definition`, () => {
 			expect(decode(fixture.deckstring)).to.deep.equal(fixture.deck);
 		});
@@ -23,6 +23,18 @@ describe("cross-language compatibility fixtures", () => {
 			const expected = fixture.canonicalDeckstring || fixture.deckstring;
 			expect(encode(fixture.deck)).to.equal(expected);
 			expect(encode(decode(fixture.deckstring))).to.equal(expected);
+		});
+	}
+
+	for (const fixture of fixtures.invalid) {
+		it(`${fixture.name} returns ${fixture.errorCode}`, () => {
+			try {
+				decode(fixture.deckstring);
+				expect.fail("Expected decode to throw");
+			} catch (error) {
+				expect(error).to.be.instanceOf(DeckstringError);
+				expect(error.code).to.equal(fixture.errorCode);
+			}
 		});
 	}
 });

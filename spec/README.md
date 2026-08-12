@@ -64,3 +64,30 @@ different output. A conforming implementation must:
 3. encode its own decoded result to that same canonical deckstring.
 
 No implementation may maintain a private copy of the golden vectors.
+
+## Stable error contract
+
+Every public decoding error exposes a machine-readable `errorCode`/`code`
+value in addition to a human-readable message. The shared values are:
+
+- `invalid_input`
+- `invalid_base64`
+- `unexpected_end`
+- `invalid_reserved`
+- `unsupported_version`
+- `unsupported_format`
+- `invalid_varint`
+- `invalid_id`
+- `invalid_count`
+- `invalid_sideboard`
+- `trailing_data`
+- `limit_exceeded`
+
+`fixtures/deckstrings.json` contains the invalid inputs and the expected code.
+Implementations may use idiomatic exception class and property names, but the
+string value must match exactly. Error messages are explanatory and are not a
+compatibility contract.
+
+Decoders reject inputs larger than 1 MiB after Base64 decoding and item groups
+larger than 10,000 entries. These are defensive limits, not valid Hearthstone
+deck sizes.

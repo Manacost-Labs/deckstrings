@@ -12,5 +12,9 @@ deckstring = encode(deck)
 
 The returned dictionary follows `../../spec/deck.schema.json`.
 
+Invalid input raises `DeckstringError`. Its `code` attribute follows the shared
+error contract in `../../spec/README.md`; callers should not match the
+human-readable message.
+
 This package is under active development and has not been published to PyPI
 yet.

@@ -1,13 +1,18 @@
 import { BufferReader, BufferWriter } from "./buffer";
 import { DeckDefinition, DeckCard, SideboardCard } from "../types";
 import { DECKSTRING_VERSION, FormatType } from "./constants";
+import { DeckstringError } from "./errors";
 
 type BaseCard = [number, number, ...any[]];
+const MAX_ITEMS_PER_GROUP = 10000;
 
 function verifyDbfId(id: unknown, name?: string): void {
 	name = name ? name : "dbf id";
 	if (!isPositiveNaturalNumber(id)) {
-		throw new Error(`Invalid ${name} ${id} (expected valid dbf id)`);
+		throw new DeckstringError(
+			"invalid_id",
+			`Invalid ${name} ${id} (expected valid dbf id)`
+		);
 	}
 }
 
@@ -18,7 +23,7 @@ function isPositiveNaturalNumber(n: unknown): boolean {
 	if (Math.floor(n) !== n) {
 		return false;
 	}
-	return n > 0;
+	return n > 0 && n <= 0x7fffffff;
 }
 
 function sort_cards<T extends BaseCard>(
@@ -47,7 +52,8 @@ function trisort_cards<T extends BaseCard>(cards: T[]): [T[], T[], T[]] {
 		} else if (isPositiveNaturalNumber(count)) {
 			n.push(tuple);
 		} else {
-			throw new Error(
+			throw new DeckstringError(
+				"invalid_count",
 				`Invalid count ${count} (expected positive natural number)`
 			);
 		}
@@ -67,13 +73,13 @@ export function encode(deck: DeckDefinition): string {
 		(typeof deck.sideboardCards !== "undefined" &&
 			!Array.isArray(deck.sideboardCards))
 	) {
-		throw new Error("Invalid deck definition");
+		throw new DeckstringError("invalid_deck", "Invalid deck definition");
 	}
 
 	const writer = new BufferWriter();
 
 	const format = deck.format;
-	const heroes = deck.heroes.slice().sort();
+	const heroes = deck.heroes.slice().sort((a, b) => a - b);
 	const cards = sort_cards(deck.cards.slice());
 	const sideboard = sort_cards((deck.sideboardCards || []).slice(), true);
 
@@ -124,12 +130,15 @@ export function decode(deckstring: string): DeckDefinition {
 	const reader = new BufferReader(deckstring);
 
 	if (reader.nextByte() !== 0) {
-		throw new Error("Invalid deckstring");
+		throw new DeckstringError("invalid_reserved", "Invalid reserved byte.");
 	}
 
-	const version = reader.nextByte();
+	const version = reader.nextVarint();
 	if (version !== DECKSTRING_VERSION) {
-		throw new Error(`Unsupported deckstring version ${version}`);
+		throw new DeckstringError(
+			"unsupported_version",
+			`Unsupported deckstring version ${version}`
+		);
 	}
 
 	const format = reader.nextVarint();
@@ -139,39 +148,69 @@ export function decode(deckstring: string): DeckDefinition {
 		format !== FormatType.FT_CLASSIC &&
 		format !== FormatType.FT_TWIST
 	) {
-		throw new Error(`Unsupported format ${format} in deckstring`);
+		throw new DeckstringError(
+			"unsupported_format",
+			`Unsupported format ${format} in deckstring`
+		);
 	}
 
-	const heroes = new Array(reader.nextVarint());
-	for (let i = 0; i < heroes.length; i++) {
-		heroes[i] = reader.nextVarint();
+	const heroCount = readGroupCount(reader);
+	if (heroCount === 0) {
+		throw new DeckstringError(
+			"invalid_count",
+			"Deckstring must contain at least one hero."
+		);
 	}
-	heroes.sort();
+	const heroes = new Array(heroCount);
+	for (let i = 0; i < heroes.length; i++) {
+		heroes[i] = readPositiveVarint(reader, "hero DBF ID");
+	}
+	heroes.sort((a, b) => a - b);
 
 	const cards: DeckCard[] = [];
 	for (let i = 1; i <= 3; i++) {
-		for (let j = 0, c = reader.nextVarint(); j < c; j++) {
+		for (let j = 0, c = readGroupCount(reader); j < c; j++) {
 			cards.push([
-				reader.nextVarint(), // dbf id
-				i === 1 || i === 2 ? i : reader.nextVarint(),
+				readPositiveVarint(reader, "card DBF ID"),
+				i === 1 || i === 2
+					? i
+					: readPositiveVarint(reader, "card count", "invalid_count"),
 			]);
 		}
 	}
 	sort_cards(cards);
 
 	const sideboardCards: SideboardCard[] = [];
-	const hasSideboard = reader.nextByte();
+	const hasSideboard = reader.atEnd ? 0 : reader.nextVarint();
+	if (hasSideboard !== 0 && hasSideboard !== 1) {
+		throw new DeckstringError(
+			"invalid_sideboard",
+			"Invalid sideboard marker."
+		);
+	}
 	if (hasSideboard == 1) {
 		for (let i = 1; i <= 3; i++) {
-			for (let j = 0, c = reader.nextVarint(); j < c; j++) {
+			for (let j = 0, c = readGroupCount(reader); j < c; j++) {
 				sideboardCards.push([
-					reader.nextVarint(), // dbf id
-					i === 1 || i === 2 ? i : reader.nextVarint(),
-					reader.nextVarint(), // sideboard card owner dbf id
+					readPositiveVarint(reader, "sideboard DBF ID"),
+					i === 1 || i === 2
+						? i
+						: readPositiveVarint(
+								reader,
+								"sideboard count",
+								"invalid_count"
+						  ),
+					readPositiveVarint(reader, "sideboard owner DBF ID"),
 				]);
 			}
 		}
 		sort_cards(sideboardCards, true);
+	}
+	if (!reader.atEnd) {
+		throw new DeckstringError(
+			"trailing_data",
+			"Deckstring contains trailing data."
+		);
 	}
 
 	return {
@@ -182,4 +221,27 @@ export function decode(deckstring: string): DeckDefinition {
 	};
 }
 
-export { FormatType };
+function readPositiveVarint(
+	reader: BufferReader,
+	name: string,
+	errorCode: "invalid_id" | "invalid_count" = "invalid_id"
+): number {
+	const value = reader.nextVarint();
+	if (value <= 0) {
+		throw new DeckstringError(errorCode, `${name} must be positive.`);
+	}
+	return value;
+}
+
+function readGroupCount(reader: BufferReader): number {
+	const count = reader.nextVarint();
+	if (count > MAX_ITEMS_PER_GROUP) {
+		throw new DeckstringError(
+			"limit_exceeded",
+			"Deckstring item group is too large."
+		);
+	}
+	return count;
+}
+
+export { DeckstringError, FormatType };

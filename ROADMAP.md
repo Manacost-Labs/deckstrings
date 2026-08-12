@@ -60,7 +60,7 @@ differ, but their JSON representation must match `spec/deck.schema.json`.
 
 ## Milestones
 
-### M0 — Foundation
+### M0 — Foundation ✅
 
 Deliverables:
 
@@ -74,7 +74,7 @@ Deliverables:
 Exit gate: the TypeScript package passes the original suite and every golden
 vector round-trips byte-for-byte.
 
-### M1 — Native codecs
+### M1 — Native codecs ✅
 
 Deliverables:
 
@@ -178,9 +178,8 @@ release approval.
 
 ## Immediate backlog
 
-1. Complete M0 fixtures and schema.
-2. Land the PHP and Python compatibility tests.
-3. Land the .NET compatibility runner.
-4. Add negative fixtures and common error categories.
-5. Modernize the TypeScript build in a separate change.
-6. Reserve package names; do not publish until names and ownership are approved.
+1. Complete the stable validation and canonicalization APIs.
+2. Expand negative fixtures and add deterministic generated tests.
+3. Modernize the TypeScript build in a separate change.
+4. Add production-grade test and static-analysis tooling per native package.
+5. Reserve package names; do not publish until names and ownership are approved.

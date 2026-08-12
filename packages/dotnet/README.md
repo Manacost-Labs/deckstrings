@@ -10,5 +10,9 @@ var deck = Deckstrings.Decode("AAEBAQcBBAMBAgMAAA==");
 var deckstring = Deckstrings.Encode(deck);
 ```
 
+Invalid input raises `DeckstringException`. Its `ErrorCode` property follows
+the shared error contract in `../../spec/README.md`; callers should not match
+the human-readable message.
+
 This package is under active development and has not been published to NuGet
 yet.
