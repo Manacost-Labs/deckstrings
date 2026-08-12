@@ -1,9 +1,13 @@
 # Release checklist
 
-Version: `X.Y.Z`
-Tag: `vX.Y.Z`
-Source commit: `________________`
-Release workflow run: `________________`
+Version: `1.0.0`
+Tag: `v1.0.0`
+Source commit: set to the final verified `main` SHA immediately before publishing
+Release workflow run: set to the final successful dry-run and published-release run
+
+This checklist is the live operational record for the first production release.
+Do not check an item from intent or configuration alone; record the current SHA,
+run URL, registry URL, and consumer evidence when that item is verified.
 
 ## One-time publishing setup
 
@@ -52,17 +56,22 @@ Release workflow run: `________________`
 ## Publish
 
 - [ ] GitHub Release targets the verified source commit and uses the exact tag
-      `vX.Y.Z`.
+      `v1.0.0`.
+- [ ] The release is stable (`prerelease` is false); the workflow rejects a
+      prerelease event before any publish job becomes eligible.
 - [ ] The GitHub Release is published; a tag alone is not treated as a release.
 - [ ] The `release` environment deployment was reviewed and approved.
 - [ ] `.github/workflows/release.yml` completed successfully.
 - [ ] npm OIDC publish completed and provenance is visible.
 - [ ] PyPI OIDC publish completed; wheel, sdist, and attestations are visible.
 - [ ] NuGet OIDC publish completed; package and symbols were accepted.
+- [ ] A rerun does not hide an existing NuGet version as success; duplicate
+      package uploads remain a hard failure unless identical public bytes were
+      independently verified and the target job is intentionally skipped.
 - [ ] GitHub release artifacts, checksums, and attestations are present.
 - [ ] Packagist source reference matches the `Manacost-Labs/deckstrings`
-      `vX.Y.Z` tag commit.
-- [ ] Packagist exposes `manacost-labs/hearthstone-deckstrings` version `X.Y.Z`.
+      `v1.0.0` tag commit.
+- [ ] Packagist exposes `manacost-labs/hearthstone-deckstrings` version `1.0.0`.
 
 ## Fresh consumer smoke
 

@@ -293,6 +293,112 @@ namespace ManacostLabs.Deckstrings
         }
 
         /// <summary>
+        /// Projects a deck to the canonical shared JSON transport shape.
+        /// </summary>
+        /// <param name="deck">The deck to project.</param>
+        /// <returns>A new transport model containing numeric tuple arrays.</returns>
+        /// <exception cref="DeckstringException">The deck cannot be canonicalized safely.</exception>
+        public static DeckTransport ToTransport(Deck deck)
+        {
+            var canonical = Canonicalize(deck);
+            return new DeckTransport
+            {
+                Format = (int)canonical.Format,
+                Heroes = canonical.Heroes.ToArray(),
+                Cards = canonical.Cards
+                    .Select(card => new[] { card.DbfId, card.Count })
+                    .ToArray(),
+                SideboardCards = canonical.SideboardCards
+                    .Select(card => new[] { card.DbfId, card.Count, card.OwnerDbfId })
+                    .ToArray(),
+            };
+        }
+
+        /// <summary>
+        /// Converts the shared JSON transport shape to a canonical typed deck.
+        /// </summary>
+        /// <param name="transport">The transport model to convert.</param>
+        /// <returns>A new canonical typed deck.</returns>
+        /// <exception cref="DeckstringException">The transport model violates the shared contract.</exception>
+        public static Deck FromTransport(DeckTransport transport)
+        {
+            if (transport == null)
+            {
+                throw new DeckstringException(
+                    DeckstringErrorCodes.InvalidDeck,
+                    "Deck transport cannot be null.");
+            }
+            if (transport.Heroes == null ||
+                transport.Cards == null ||
+                transport.SideboardCards == null)
+            {
+                throw new DeckstringException(
+                    DeckstringErrorCodes.InvalidDeck,
+                    "Deck transport collections cannot be null.");
+            }
+
+            var deck = new Deck { Format = (DeckFormat)transport.Format };
+            foreach (var hero in transport.Heroes)
+            {
+                deck.Heroes.Add(hero);
+            }
+            for (var index = 0; index < transport.Cards.Length; index++)
+            {
+                var card = transport.Cards[index];
+                if (card == null || card.Length != 2)
+                {
+                    throw new DeckstringException(
+                        DeckstringErrorCodes.InvalidDeck,
+                        $"cards[{index}] must be a two-item array.");
+                }
+                deck.Cards.Add(new DeckCard(card[0], card[1]));
+            }
+            for (var index = 0; index < transport.SideboardCards.Length; index++)
+            {
+                var card = transport.SideboardCards[index];
+                if (card == null || card.Length != 3)
+                {
+                    throw new DeckstringException(
+                        DeckstringErrorCodes.InvalidDeck,
+                        $"sideboardCards[{index}] must be a three-item array.");
+                }
+                deck.SideboardCards.Add(new SideboardCard(card[0], card[1], card[2]));
+            }
+
+            return Canonicalize(deck);
+        }
+
+        /// <summary>
+        /// Projects a validation result to the shared JSON transport shape.
+        /// </summary>
+        /// <param name="result">The validation result to project.</param>
+        /// <returns>A new validation transport model.</returns>
+        public static ValidationResultTransport ToTransport(ValidationResult result)
+        {
+#if NET6_0_OR_GREATER
+            ArgumentNullException.ThrowIfNull(result);
+#else
+            if (result == null)
+            {
+                throw new ArgumentNullException(nameof(result));
+            }
+#endif
+
+            return new ValidationResultTransport
+            {
+                Valid = result.IsValid,
+                Errors = result.Errors
+                    .Select(error => new ValidationErrorTransport
+                    {
+                        Code = error.Code,
+                        Path = error.Path,
+                        Message = error.Message,
+                    })
+                    .ToArray(),
+            };
+        }
+
+        /// <summary>
         /// Parses a full Hearthstone clipboard export.
         /// </summary>
         /// <param name="text">The clipboard text to parse.</param>

@@ -1,0 +1,42 @@
+name: Feature request
+description: Propose a compatible addition to the shared deckstring contract
+title: "[Feature]: "
+labels:
+  - enhancement
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: Describe the backend or compatibility problem this would solve.
+    validations:
+      required: true
+  - type: dropdown
+    id: scope
+    attributes:
+      label: Contract scope
+      options:
+        - Shared across all four implementations
+        - JavaScript / TypeScript packaging
+        - PHP packaging
+        - Python packaging
+        - .NET packaging
+        - Documentation or tooling
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed API or behavior
+      description: Include expected inputs, outputs, error codes, and compatibility impact.
+    validations:
+      required: true
+  - type: checkboxes
+    id: boundaries
+    attributes:
+      label: Product boundaries
+      options:
+        - label: This belongs in the deterministic codec and does not require card data, network access, images, or patch-legality rules.
+          required: true
+        - label: I have considered how the behavior can be represented in shared fixtures for all supported languages.
+          required: true

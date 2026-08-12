@@ -58,10 +58,45 @@ The package validates a typed `Deck` and does not deserialize JSON. If an API
 must reject unknown JSON fields, configure that behavior in its serializer
 before calling `Validate`.
 
-`DeckCard` and `SideboardCard` are idiomatic classes rather than JSON tuples.
-Project them to `[dbfId, count]` and `[dbfId, count, ownerDbfId]` transport
-arrays when an HTTP API must expose the normative cross-language JSON shape;
-see the repository ASP.NET example.
+## Shared JSON transport
+
+`Deck` remains the idiomatic .NET model. Use `DeckTransport` at HTTP and JSON
+boundaries when the exact cross-language schema is required. It exposes numeric
+`Format`, `Heroes`, `[dbfId, count]` card arrays, and
+`[dbfId, count, ownerDbfId]` sideboard arrays. `ToTransport` canonicalizes the
+deck; `FromTransport` validates the tuple shape and returns a canonical `Deck`.
+
+```csharp
+using System.Text.Json;
+using ManacostLabs.Deckstrings;
+
+var options = new JsonSerializerOptions
+{
+    PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+};
+
+var transport = Deckstrings.ToTransport(deck);
+var json = JsonSerializer.Serialize(transport, options);
+// {"format":1,"heroes":[7],"cards":[[1,2],[2,2],[3,2],[4,1]],"sideboardCards":[]}
+
+var input = JsonSerializer.Deserialize<DeckTransport>(json, options)
+    ?? throw new InvalidOperationException("Missing deck JSON.");
+var restored = Deckstrings.FromTransport(input);
+```
+
+Project validation in the same way. `ValidationResultTransport` and
+`ValidationErrorTransport` expose the exact `valid`, `errors`, `code`, `path`,
+and `message` shape when the same camel-case policy is used:
+
+```csharp
+var validation = Deckstrings.ToTransport(Deckstrings.Validate(restored));
+var validationJson = JsonSerializer.Serialize(validation, options);
+```
+
+The library itself does not reference `System.Text.Json`; applications may use
+their serializer of choice as long as public property names are emitted in
+camel case. Configure unknown-property rejection in that serializer when raw
+JSON must satisfy `additionalProperties: false`.
 
 ## Clipboard exports
 

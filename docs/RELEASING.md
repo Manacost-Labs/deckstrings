@@ -25,6 +25,13 @@ Create the `release` environment and:
 - use GitHub-hosted runners for OIDC publishing;
 - keep long-lived publish tokens out of repository and environment secrets.
 
+Protect stable tags with an active repository tag ruleset matching
+`v*.*.*`. Updating and deleting matching tags must be denied without a bypass;
+published versions are immutable and a release tag must never move to another
+commit. Repository Actions should require full commit SHA pinning and allow only
+GitHub-owned actions plus the explicitly reviewed third-party publishers and
+runtime setup actions used by these workflows.
+
 GitHub evaluates environment protection before the publish job runs. See
 [Deployments and environments](https://docs.github.com/en/actions/reference/workflows-and-actions/deployments-and-environments).
 
@@ -212,7 +219,8 @@ as an additional consumer-level check.
 1. In GitHub, draft a new Release targeting the verified `main` commit.
 2. Create or select the exact tag `vX.Y.Z`; the title should also identify
    `X.Y.Z`.
-3. Paste reviewed release notes. Do not mark a stable release as a prerelease.
+3. Paste reviewed release notes. Do not mark a stable release as a prerelease;
+   the workflow fails its source-verification job when `prerelease` is true.
 4. Publish the GitHub Release. Creating or pushing a tag alone does not invoke
    the production publishing path.
 5. Review and approve the job waiting on the `release` environment.
@@ -325,6 +333,10 @@ identity, while GitHub attestations bind release artifacts to this workflow.
   checksums.
 - If the workflow supports retrying only an unpublished target, use the exact
   original artifact. An already-published target must be skipped, not replaced.
+- NuGet duplicate responses are hard failures in the production job. Do not use
+  `--skip-duplicate` to turn a rerun into a green release: first compare the
+  public package to the retained artifact, then retry only the still-unpublished
+  targets through a reviewed recovery change.
 - If identical artifacts cannot be proven, fix the issue and release a new
   patch version.
 - A green build or one successful registry upload is not a completed release.

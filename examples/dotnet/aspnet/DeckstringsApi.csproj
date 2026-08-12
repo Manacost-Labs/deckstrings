@@ -4,8 +4,9 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <DeckstringsPackageVersion Condition="'$(DeckstringsPackageVersion)' == ''">1.0.0</DeckstringsPackageVersion>
   </PropertyGroup>
   <ItemGroup>
-    <PackageReference Include="ManacostLabs.Deckstrings" Version="1.0.0" />
+    <PackageReference Include="ManacostLabs.Deckstrings" Version="$(DeckstringsPackageVersion)" />
   </ItemGroup>
 </Project>

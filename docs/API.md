@@ -39,8 +39,9 @@ The JSON-compatible representation is:
   by `(ownerDbfId, dbfId)`.
 - JavaScript, PHP, and Python mapping inputs reject properties other than
   `format`, `heroes`, `cards`, and `sideboardCards` as `invalid_deck`. The .NET
-  API accepts a typed `Deck`, so unknown JSON-property handling belongs to the
-  application's serializer boundary rather than `Deckstrings.Validate`.
+  codec accepts a typed `Deck`; use `DeckTransport` plus `FromTransport` for
+  the tuple-array JSON shape and configure unknown-property handling at the
+  application's serializer boundary.
 
 Canonical output sorts heroes and main-deck cards by DBF ID. It sorts sideboard
 cards by owner DBF ID and then card DBF ID. Public operations do not mutate
@@ -311,23 +312,58 @@ using ManacostLabs.Deckstrings;
 | `Deckstrings.Validate` | `(Deck? deck) -> ValidationResult` |
 | `Deckstrings.ParseExport` | `(string text) -> DeckExport` |
 | `Deckstrings.FormatExport` | `(Deck deck, DeckExportMetadata? metadata = null, Func<int, CardDisplay?>? cardResolver = null) -> string` |
+| `Deckstrings.ToTransport` | `(Deck deck) -> DeckTransport` |
+| `Deckstrings.FromTransport` | `(DeckTransport transport) -> Deck` |
+| `Deckstrings.ToTransport` | `(ValidationResult result) -> ValidationResultTransport` |
 
 `ValidationResult.IsValid` and `ValidationResult.Errors` correspond to the
 shared `valid` and `errors` fields. Each `ValidationError` exposes `Code`,
 `Path`, and `Message`. `DeckFormat` defines `Wild`, `Standard`, `Classic`, and
 `Twist`.
 
-The library validates an already constructed `Deck`; it does not deserialize
-JSON. Applications that accept raw JSON should configure their serializer to
-reject unmapped properties before calling `Validate` (for example with
-`JsonUnmappedMemberHandling.Disallow` on supported .NET versions).
-
 The idiomatic .NET model uses `DeckCard` and `SideboardCard` classes, so its
 default JSON serialization is not the tuple-array wire shape shown above.
-Map it to an explicit transport DTO when exposing the shared JSON contract;
-the ASP.NET example includes a `ToTransport` projection. Likewise, expose
-`ValidationResult.IsValid` as the transport field `valid` when a JSON client
-must consume the exact shared result shape.
+`DeckTransport` instead exposes `Format`, `Heroes`, `Cards`, and
+`SideboardCards`, with cards represented as `int[][]`. `ToTransport(Deck)`
+canonicalizes and projects a deck; `FromTransport` validates tuple lengths and
+returns a canonical typed `Deck` or throws `DeckstringException` with a stable
+code.
+
+The transport classes use normal PascalCase .NET properties. Serialize them
+with a camel-case naming policy to produce the exact shared field names:
+
+```csharp
+using System;
+using System.Text.Json;
+using System.Text.Json.Serialization;
+using ManacostLabs.Deckstrings;
+
+var jsonOptions = new JsonSerializerOptions
+{
+    PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+    UnmappedMemberHandling = JsonUnmappedMemberHandling.Disallow,
+};
+
+var transport = JsonSerializer.Deserialize<DeckTransport>(requestJson, jsonOptions)
+    ?? throw new InvalidOperationException("A deck body is required.");
+var deck = Deckstrings.FromTransport(transport);
+var responseJson = JsonSerializer.Serialize(
+    Deckstrings.ToTransport(deck),
+    jsonOptions);
+```
+
+`JsonUnmappedMemberHandling.Disallow` is an application-boundary setting on
+supported .NET versions; it is not imposed by the `netstandard2.0` library.
+If a service must distinguish an omitted JSON property from an explicitly empty
+collection, validate the raw body against
+[`spec/deck.schema.json`](../spec/deck.schema.json) before deserializing the
+DTO.
+
+`ToTransport(ValidationResult)` returns `ValidationResultTransport`, whose
+`Errors` collection contains `ValidationErrorTransport` values. Under the same
+camel-case policy it serializes `Valid` and each error's `Code`, `Path`, and
+`Message` as the shared `valid`/`errors` response shape. The ASP.NET example
+uses these public transport projections rather than maintaining a private DTO.
 
 ```csharp
 try

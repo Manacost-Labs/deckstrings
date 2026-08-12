@@ -14,7 +14,11 @@ static IResult DecodeDeck(DecodeRequest request)
     try
     {
         var deck = Deckstrings.Decode(request.Deckstring);
-        return Results.Ok(new { deck = ToTransport(deck), deckstring = Deckstrings.Encode(deck) });
+        return Results.Ok(new
+        {
+            deck = Deckstrings.ToTransport(deck),
+            deckstring = Deckstrings.Encode(deck),
+        });
     }
     catch (DeckstringException error)
     {
@@ -32,7 +36,7 @@ static IResult ParseDeckExport(ExportRequest request)
             : new { name = parsed.Metadata.Name, comments = parsed.Metadata.Comments };
         return Results.Ok(new
         {
-            deck = ToTransport(parsed.Deck),
+            deck = Deckstrings.ToTransport(parsed.Deck),
             deckstring = parsed.Deckstring,
             metadata,
         });
@@ -76,15 +80,6 @@ static IResult InvalidInput(DeckstringException error)
         },
     });
 }
-
-static object ToTransport(Deck deck) => new
-{
-    format = (int)deck.Format,
-    heroes = deck.Heroes,
-    cards = deck.Cards.Select(card => new[] { card.DbfId, card.Count }),
-    sideboardCards = deck.SideboardCards.Select(
-        card => new[] { card.DbfId, card.Count, card.OwnerDbfId }),
-};
 
 internal sealed record DecodeRequest(string Deckstring);
 

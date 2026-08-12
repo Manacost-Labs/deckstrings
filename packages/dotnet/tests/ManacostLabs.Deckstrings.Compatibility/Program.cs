@@ -36,8 +36,14 @@ internal static class Program
                 : deckstring;
             var expected = ParseDeck(fixture.GetProperty("deck"));
             var decoded = Deckstrings.Decode(deckstring);
+            var transport = Deckstrings.ToTransport(decoded);
 
             AssertDecksEqual(expected, decoded, $"{name} decode");
+            AssertTransportEqual(fixture.GetProperty("deck"), transport, $"{name} transport");
+            AssertDecksEqual(
+                expected,
+                Deckstrings.FromTransport(transport),
+                $"{name} transport round-trip");
             AssertEqual(canonicalDeckstring, Deckstrings.Encode(expected), $"{name} encode");
             AssertEqual(canonicalDeckstring, Deckstrings.Encode(decoded), $"{name} round-trip");
             checkedFixtures++;
@@ -100,10 +106,13 @@ internal static class Program
         {
             var name = fixture.GetProperty("name").GetString() ?? "unnamed";
             var result = Deckstrings.Validate(ParseDeck(fixture.GetProperty("deck")));
+            var transport = Deckstrings.ToTransport(result);
             AssertEqual(fixture.GetProperty("valid").GetBoolean(), result.IsValid, $"{name} valid");
+            AssertEqual(fixture.GetProperty("valid").GetBoolean(), transport.Valid, $"{name} transport valid");
 
             var expectedErrors = fixture.GetProperty("errors").EnumerateArray().ToArray();
             AssertEqual(expectedErrors.Length, result.Errors.Count, $"{name} error count");
+            AssertEqual(expectedErrors.Length, transport.Errors.Length, $"{name} transport error count");
             for (var index = 0; index < expectedErrors.Length; index++)
             {
                 AssertEqual(
@@ -114,6 +123,19 @@ internal static class Program
                     expectedErrors[index].GetProperty("path").GetString(),
                     result.Errors[index].Path,
                     $"{name} error {index} path");
+                AssertEqual(
+                    expectedErrors[index].GetProperty("code").GetString(),
+                    transport.Errors[index].Code,
+                    $"{name} transport error {index} code");
+                AssertEqual(
+                    expectedErrors[index].GetProperty("path").GetString(),
+                    transport.Errors[index].Path,
+                    $"{name} transport error {index} path");
+                if (string.IsNullOrWhiteSpace(transport.Errors[index].Message))
+                {
+                    throw new InvalidOperationException(
+                        $"{name} transport error {index} has no message.");
+                }
             }
             checkedFixtures++;
         }
@@ -281,6 +303,25 @@ internal static class Program
         AssertSequence(
             expected.SideboardCards.Select(card => (card.DbfId, card.Count, card.OwnerDbfId)),
             actual.SideboardCards.Select(card => (card.DbfId, card.Count, card.OwnerDbfId)),
+            $"{name} sideboards");
+    }
+
+    private static void AssertTransportEqual(JsonElement expected, DeckTransport actual, string name)
+    {
+        AssertEqual(expected.GetProperty("format").GetInt32(), actual.Format, $"{name} format");
+        AssertSequence(
+            expected.GetProperty("heroes").EnumerateArray().Select(hero => hero.GetInt32()),
+            actual.Heroes,
+            $"{name} heroes");
+        AssertSequence(
+            expected.GetProperty("cards").EnumerateArray()
+                .Select(card => (card[0].GetInt32(), card[1].GetInt32())),
+            actual.Cards.Select(card => (card[0], card[1])),
+            $"{name} cards");
+        AssertSequence(
+            expected.GetProperty("sideboardCards").EnumerateArray()
+                .Select(card => (card[0].GetInt32(), card[1].GetInt32(), card[2].GetInt32())),
+            actual.SideboardCards.Select(card => (card[0], card[1], card[2])),
             $"{name} sideboards");
     }
 

@@ -174,6 +174,178 @@ const text = formatExport(deck, { name: "Example" }, (id) => cards.get(id));
 
 Resolver output affects comment lines only; it cannot change the encoded deck.
 
+## Migrating from `python-hearthstone`
+
+The [`hearthstone` package](https://github.com/HearthSim/python-hearthstone) is
+a broader toolkit: in addition to
+`hearthstone.deckstrings`, it provides enums, card-definition readers, DBF
+helpers, and a log parser. `manacost-deckstrings` replaces only its deckstring
+codec. Keep `hearthstone` installed if the application still uses those other
+modules or the optional card data package.
+
+Replace the codec import and object-property API:
+
+```diff
+- from hearthstone.deckstrings import Deck
+- from hearthstone.enums import FormatType
++ from manacost_deckstrings import decode, encode
+
+- deck = Deck.from_deckstring(deckstring)
+- assert deck.format == FormatType.FT_WILD
+- canonical_deckstring = deck.as_deckstring
++ deck = decode(deckstring)
++ assert deck["format"] == 1
++ canonical_deckstring = encode(deck)
+```
+
+The models differ even though both use DBF IDs:
+
+| `python-hearthstone` | `manacost-deckstrings` |
+| --- | --- |
+| mutable `Deck` instance | JSON-compatible typed dictionary |
+| `deck.format` as `FormatType` | `deck["format"]` as integer `1`–`4` |
+| `deck.heroes` | `deck["heroes"]` |
+| `deck.cards` with tuples | `deck["cards"]` with two-item lists |
+| `deck.sideboards` with tuples | `deck["sideboardCards"]` with three-item lists |
+| `deck.as_deckstring` property | `encode(deck)` function |
+
+To migrate an existing in-memory `hearthstone.deckstrings.Deck`, project it
+explicitly and validate it before encoding:
+
+```python
+from hearthstone.deckstrings import Deck as LegacyDeck
+from manacost_deckstrings import encode, validate
+
+legacy = LegacyDeck.from_deckstring(input_deckstring)
+candidate = {
+    "format": int(legacy.format),
+    "heroes": list(legacy.heroes),
+    "cards": [list(card) for card in legacy.cards],
+    "sideboardCards": [list(card) for card in legacy.sideboards],
+}
+
+result = validate(candidate)
+if not result["valid"]:
+    raise ValueError(result["errors"])
+
+canonical_deckstring = encode(candidate)
+```
+
+The new decoder is deliberately stricter than the legacy implementation. It
+requires strict padded Base64, rejects duplicate IDs and trailing bytes, bounds
+varints and collection sizes, and reports a stable `DeckstringError.code`.
+Run stored deckstrings through `decode` during rollout rather than assuming
+that every value accepted by the old parser remains valid.
+
+For complete clipboard text, use `parse_export` instead of first extracting a
+Base64 line yourself:
+
+```python
+from manacost_deckstrings import parse_export
+
+parsed = parse_export(clipboard_text)
+deck = parsed["deck"]
+deck_name = parsed["metadata"].get("name")
+canonical_deckstring = parsed["deckstring"]
+```
+
+Card names, costs, set rotation, and legality still belong to a separate card
+catalog. Pass preloaded card data to `format_export` through its resolver when
+human-readable card lines are required.
+
+## Migrating from `HearthDb`
+
+[`HearthDb`](https://github.com/HearthSim/HearthDb) combines deck serialization
+with a Hearthstone card database,
+generated card IDs, and game enums. `ManacostLabs.Deckstrings` is intentionally
+only a dependency-free codec. Keep `HearthDb` (or another card catalog) if the
+application needs `Cards`, localized names, costs, sets, or collectible-card
+lookups.
+
+For direct decoding and encoding, replace `DeckSerializer`:
+
+```diff
+- using HearthDb.Deckstrings;
++ using ManacostLabs.Deckstrings;
+
+- var deck = DeckSerializer.Deserialize(deckstring);
+- var canonicalDeckstring = DeckSerializer.Serialize(deck, includeComments: false);
++ var deck = Deckstrings.Decode(deckstring);
++ var canonicalDeckstring = Deckstrings.Encode(deck);
+```
+
+The native object models are not assignment-compatible:
+
+| `HearthDb.Deckstrings.Deck` | `ManacostLabs.Deckstrings.Deck` |
+| --- | --- |
+| one `HeroDbfId` | `Heroes` collection |
+| `CardDbfIds` dictionary | `Cards` collection of `DeckCard` |
+| nested `Sideboards` dictionaries | flat `SideboardCards` collection |
+| `HearthDb.Enums.FormatType` | `DeckFormat` |
+| `Name`, `DeckId`, `ZodiacYear` | not part of the binary deck model |
+
+An explicit conversion keeps that boundary visible:
+
+```csharp
+using System;
+using HearthDb.Deckstrings;
+using ManacostLabs.Deckstrings;
+using NewDeck = ManacostLabs.Deckstrings.Deck;
+using NewDeckstrings = ManacostLabs.Deckstrings.Deckstrings;
+
+static NewDeck ConvertDeck(HearthDb.Deckstrings.Deck source)
+{
+    var target = new NewDeck { Format = (DeckFormat)(int)source.Format };
+    target.Heroes.Add(source.HeroDbfId);
+
+    foreach (var card in source.CardDbfIds)
+        target.Cards.Add(new DeckCard(card.Key, card.Value));
+
+    foreach (var sideboard in source.Sideboards)
+        foreach (var card in sideboard.Value)
+            target.SideboardCards.Add(
+                new SideboardCard(card.Key, card.Value, sideboard.Key));
+
+    return target;
+}
+
+var legacy = DeckSerializer.Deserialize(input);
+var deck = ConvertDeck(legacy);
+var validation = NewDeckstrings.Validate(deck);
+if (!validation.IsValid)
+    throw new InvalidOperationException(validation.Errors[0].Code);
+
+var canonicalDeckstring = NewDeckstrings.Encode(deck);
+```
+
+Treat `Name`, `DeckId`, and `ZodiacYear` separately. A name can be carried in
+`DeckExportMetadata.Name`; `DeckId` and `ZodiacYear` are application metadata
+and are not encoded by the shared deckstring format. Use `ParseExport` when the
+input may contain a full clipboard export instead of relying on
+`DeckSerializer.Deserialize` to combine card data and clipboard parsing.
+
+To keep HearthDb card display data while using the new formatter, adapt it at
+the resolver boundary:
+
+```csharp
+using HearthDb;
+using ManacostLabs.Deckstrings;
+
+CardDisplay? ResolveCard(int dbfId)
+{
+    var card = Cards.GetFromDbfId(dbfId);
+    return card is null ? null : new CardDisplay(card.Name, card.Cost);
+}
+
+var metadata = new DeckExportMetadata { Name = legacy.Name };
+var clipboardText = Deckstrings.FormatExport(deck, metadata, ResolveCard);
+```
+
+Unlike HearthDb serialization, the core codec does not require a DBF ID to
+exist in a bundled card database and does not decide whether a deck is legal.
+It validates the binary/model contract, reports stable error codes, and leaves
+catalog and patch-specific rules to the application.
+
 ## Suggested rollout
 
 1. Upgrade CI and production runtimes.
