@@ -41,6 +41,20 @@ deleted. The baseline SHA and dry-run ID above retain the minimum audit trail;
 the detailed PR and settings export should be stored with the migration
 operations record before deletion.
 
+## External retirement archive
+
+The Manacost Labs repository administrator retains the external archive
+`deckstrings-2026-08-12.tar.gz` outside every repository in this retirement
+scope. Its SHA-256 is
+`00efa4240dbda0caed481c36ab620b52aae3265f3382996708a990b662ca2707`.
+Before deletion, verify that checksum against the archive and its separate
+receipt.
+
+The archive contains complete, verified Git bundles and mirror clones of both
+previous repositories, source pull-request refs 1-7, pull-request and label
+exports, a repository-settings export, and the verified release dry-run
+artifacts from before and after the repository transfer.
+
 Branch protection, the `release` environment, reviewer policy, security
 features, repository variables, and registry trusted-publisher records must be
 recreated for `Manacost-Labs/deckstrings`. A successful run in the previous
