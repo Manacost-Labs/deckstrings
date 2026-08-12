@@ -1,9 +1,16 @@
 import { BufferReader, BufferWriter } from "./buffer";
-import { DeckDefinition, DeckCard, SideboardCard } from "../types";
+import type { DeckCard, DeckDefinition, SideboardCard } from "./types";
 import { DECKSTRING_VERSION, FormatType } from "./constants";
 import { DeckstringError } from "./errors";
+import { canonicalize, validate } from "./api";
+import { formatExportWithCodec, parseExportWithCodec } from "./export";
+import type {
+	CardResolver,
+	FormatExportMetadata,
+	ParsedExport,
+} from "./export";
 
-type BaseCard = [number, number, ...any[]];
+type BaseCard = [number, number, ...unknown[]];
 const MAX_ITEMS_PER_GROUP = 10000;
 
 function verifyDbfId(id: unknown, name?: string): void {
@@ -17,10 +24,10 @@ function verifyDbfId(id: unknown, name?: string): void {
 }
 
 function isPositiveNaturalNumber(n: unknown): boolean {
-	if (typeof n !== "number" || !isFinite(n)) {
+	if (typeof n !== "number" || !Number.isFinite(n)) {
 		return false;
 	}
-	if (Math.floor(n) !== n) {
+	if (!Number.isInteger(n)) {
 		return false;
 	}
 	return n > 0 && n <= 0x7fffffff;
@@ -31,9 +38,9 @@ function sort_cards<T extends BaseCard>(
 	sideboard: boolean = false
 ): T[] {
 	if (sideboard) {
-		return cards.sort((a, b) => a[2] - b[2] || a[0] - b[0]) || 0;
+		return cards.sort((a, b) => Number(a[2]) - Number(b[2]) || a[0] - b[0]);
 	}
-	return cards.sort((a, b) => a[0] - b[0] || 0);
+	return cards.sort((a, b) => a[0] - b[0]);
 }
 
 function trisort_cards<T extends BaseCard>(cards: T[]): [T[], T[], T[]] {
@@ -62,41 +69,28 @@ function trisort_cards<T extends BaseCard>(cards: T[]): [T[], T[], T[]] {
 }
 
 export function encode(deck: DeckDefinition): string {
-	if (
-		typeof deck !== "object" ||
-		(deck.format !== FormatType.FT_WILD &&
-			deck.format !== FormatType.FT_STANDARD &&
-			deck.format !== FormatType.FT_CLASSIC &&
-			deck.format !== FormatType.FT_TWIST) ||
-		!Array.isArray(deck.heroes) ||
-		!Array.isArray(deck.cards) ||
-		(typeof deck.sideboardCards !== "undefined" &&
-			!Array.isArray(deck.sideboardCards))
-	) {
-		throw new DeckstringError("invalid_deck", "Invalid deck definition");
-	}
-
+	const canonicalDeck = canonicalize(deck);
 	const writer = new BufferWriter();
 
-	const format = deck.format;
-	const heroes = deck.heroes.slice().sort((a, b) => a - b);
-	const cards = sort_cards(deck.cards.slice());
-	const sideboard = sort_cards((deck.sideboardCards || []).slice(), true);
+	const format = canonicalDeck.format;
+	const heroes = canonicalDeck.heroes;
+	const cards = canonicalDeck.cards;
+	const sideboard = canonicalDeck.sideboardCards;
 
 	writer.null();
 	writer.varint(DECKSTRING_VERSION);
 	writer.varint(format);
 	writer.varint(heroes.length);
-	for (let hero of heroes) {
+	for (const hero of heroes) {
 		verifyDbfId(hero, "hero");
 		writer.varint(hero);
 	}
 
-	for (let list of trisort_cards(cards)) {
+	for (const list of trisort_cards(cards)) {
 		writer.varint(list.length);
-		for (let tuple of list) {
+		for (const tuple of list) {
 			const [card, count] = tuple;
-			verifyDbfId(card), "card";
+			verifyDbfId(card, "card");
 			writer.varint(card);
 			if (count !== 1 && count !== 2) {
 				writer.varint(count);
@@ -106,9 +100,9 @@ export function encode(deck: DeckDefinition): string {
 
 	if (sideboard.length) {
 		writer.varint(1);
-		for (let list of trisort_cards(sideboard)) {
+		for (const list of trisort_cards(sideboard)) {
 			writer.varint(list.length);
-			for (let tuple of list) {
+			for (const tuple of list) {
 				const [card, count, owner] = tuple;
 				verifyDbfId(card, "sideboard card");
 				verifyDbfId(owner, "sideboard card owner");
@@ -126,7 +120,7 @@ export function encode(deck: DeckDefinition): string {
 	return writer.toString();
 }
 
-export function decode(deckstring: string): DeckDefinition {
+export function decode(deckstring: string): Required<DeckDefinition> {
 	const reader = new BufferReader(deckstring);
 
 	if (reader.nextByte() !== 0) {
@@ -199,7 +193,7 @@ export function decode(deckstring: string): DeckDefinition {
 								reader,
 								"sideboard count",
 								"invalid_count"
-						  ),
+							),
 					readPositiveVarint(reader, "sideboard owner DBF ID"),
 				]);
 			}
@@ -213,12 +207,29 @@ export function decode(deckstring: string): DeckDefinition {
 		);
 	}
 
-	return {
+	return canonicalize({
 		cards,
 		sideboardCards,
 		heroes,
 		format,
-	};
+	});
+}
+
+export function parseExport(text: unknown): ParsedExport {
+	return parseExportWithCodec(text, { decode, encode, canonicalize });
+}
+
+export function formatExport(
+	deck: DeckDefinition,
+	metadata: FormatExportMetadata = {},
+	resolveCard?: CardResolver
+): string {
+	return formatExportWithCodec(
+		deck,
+		{ decode, encode, canonicalize },
+		metadata,
+		resolveCard
+	);
 }
 
 function readPositiveVarint(
@@ -244,4 +255,19 @@ function readGroupCount(reader: BufferReader): number {
 	return count;
 }
 
-export { DeckstringError, FormatType };
+export { canonicalize, DeckstringError, FormatType, validate };
+export type {
+	DeckCard,
+	DeckDefinition,
+	DeckList,
+	DeckstringErrorCode,
+	SideboardCard,
+} from "./types";
+export type { ValidationError, ValidationResult } from "./api";
+export type {
+	CardResolver,
+	ExportMetadata,
+	FormatExportMetadata,
+	ParsedExport,
+	ResolvedCard,
+} from "./export";

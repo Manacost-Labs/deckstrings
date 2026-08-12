@@ -163,6 +163,21 @@
       "name": "trailing-data",
       "deckstring": "AAEBAQcAAAAA/w==",
       "errorCode": "trailing_data"
+    },
+    {
+      "name": "duplicate-hero-id",
+      "deckstring": "AAEBAgcHAAAAAA==",
+      "errorCode": "invalid_deck"
+    },
+    {
+      "name": "duplicate-card-id",
+      "deckstring": "AAEBAQcCAQEAAAA=",
+      "errorCode": "invalid_deck"
+    },
+    {
+      "name": "duplicate-sideboard-owner-card-pair",
+      "deckstring": "AAEBAQcAAAABAgUKBQoAAA==",
+      "errorCode": "invalid_deck"
     }
   ]
 }

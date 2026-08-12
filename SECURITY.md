@@ -2,15 +2,20 @@
 
 ## Supported versions
 
-No public Manacost Labs package has been released yet. Security fixes currently
-target the latest commit on `main`. A supported-version table will be published
-with version `1.0.0`.
+| Version | Supported |
+| --- | --- |
+| Latest `1.x` release | Yes |
+| Older `1.x` releases | Security fixes are delivered in the latest `1.x` |
+| Historical HearthSim releases | No |
+
+Before the first public release, the latest commit on `main` is the supported
+release candidate.
 
 ## Reporting a vulnerability
 
 Do not open a public issue for a suspected vulnerability. Use GitHub's private
-vulnerability reporting for this repository when available, or contact a
-Manacost Labs organization owner privately.
+vulnerability reporting for this repository, or contact a Manacost Labs
+organization owner privately if GitHub reporting is unavailable.
 
 Please include the affected language, a minimal proof of concept, impact, and
 any suggested mitigation. Avoid including private Hearthstone or user data.

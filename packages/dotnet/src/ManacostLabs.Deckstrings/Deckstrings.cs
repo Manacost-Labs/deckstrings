@@ -1,16 +1,30 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.IO;
 using System.Linq;
+using System.Text;
 
 namespace ManacostLabs.Deckstrings
 {
+    /// <summary>
+    /// Encodes, decodes, validates, and formats Hearthstone deckstrings.
+    /// </summary>
     public static class Deckstrings
     {
         private const int Version = 1;
         private const int MaxItemsPerGroup = 10000;
+        private const int MaxItemsPerDeck = 30000;
         private const int MaxBase64Length = 1398104;
+        private const int MaxDecodedLength = 1048576;
+        private const int MaxExportUtf8Length = 1500000;
 
+        /// <summary>
+        /// Encodes a deck into its canonical version 1 deckstring.
+        /// </summary>
+        /// <param name="deck">The deck to encode.</param>
+        /// <returns>The canonical Base64 deckstring.</returns>
+        /// <exception cref="DeckstringException">The deck does not satisfy the shared contract.</exception>
         public static string Encode(Deck deck)
         {
             if (deck == null)
@@ -61,6 +75,12 @@ namespace ManacostLabs.Deckstrings
             }
         }
 
+        /// <summary>
+        /// Decodes a version 1 deckstring into a new canonical deck model.
+        /// </summary>
+        /// <param name="deckstring">The Base64 deckstring to decode.</param>
+        /// <returns>A new canonical deck.</returns>
+        /// <exception cref="DeckstringException">The input does not satisfy the shared contract.</exception>
         public static Deck Decode(string deckstring)
         {
             if (string.IsNullOrEmpty(deckstring))
@@ -93,6 +113,12 @@ namespace ManacostLabs.Deckstrings
                     DeckstringErrorCodes.InvalidBase64,
                     "Deckstring is not valid Base64.",
                     error);
+            }
+            if (bytes.Length > MaxDecodedLength)
+            {
+                throw new DeckstringException(
+                    DeckstringErrorCodes.LimitExceeded,
+                    "Deckstring exceeds the maximum supported size.");
             }
 
             using (var stream = new MemoryStream(bytes, false))
@@ -200,29 +226,37 @@ namespace ManacostLabs.Deckstrings
             }
         }
 
-        private static Deck Canonicalize(Deck deck)
+        /// <summary>
+        /// Creates a sorted copy of a deck without legacy zero-count entries.
+        /// </summary>
+        /// <param name="deck">The deck to canonicalize.</param>
+        /// <returns>A new canonical deck; the supplied model is never mutated.</returns>
+        /// <exception cref="DeckstringException">The deck cannot be canonicalized safely.</exception>
+        public static Deck Canonicalize(Deck deck)
         {
-            if (!IsSupportedFormat((int)deck.Format))
+            if (deck == null)
             {
                 throw new DeckstringException(
-                    DeckstringErrorCodes.UnsupportedFormat,
-                    $"Unsupported format {(int)deck.Format}.");
+                    DeckstringErrorCodes.InvalidDeck,
+                    "Deck cannot be null.");
+            }
+
+            var errors = CollectValidationErrors(deck, true);
+            if (errors.Count != 0)
+            {
+                var error = errors[0];
+                throw new DeckstringException(error.Code, error.Message);
             }
 
             var canonical = new Deck { Format = deck.Format };
             foreach (var hero in deck.Heroes.OrderBy(hero => hero))
             {
-                canonical.Heroes.Add(RequirePositive(
-                    hero,
-                    "hero DBF ID",
-                    DeckstringErrorCodes.InvalidId));
+                canonical.Heroes.Add(hero);
             }
 
             foreach (var card in deck.Cards.Where(card => card.Count != 0).OrderBy(card => card.DbfId))
             {
-                canonical.Cards.Add(new DeckCard(
-                    RequirePositive(card.DbfId, "card DBF ID", DeckstringErrorCodes.InvalidId),
-                    RequirePositive(card.Count, "card count", DeckstringErrorCodes.InvalidCount)));
+                canonical.Cards.Add(new DeckCard(card.DbfId, card.Count));
             }
 
             foreach (var card in deck.SideboardCards
@@ -231,15 +265,414 @@ namespace ManacostLabs.Deckstrings
                 .ThenBy(card => card.DbfId))
             {
                 canonical.SideboardCards.Add(new SideboardCard(
-                    RequirePositive(card.DbfId, "sideboard DBF ID", DeckstringErrorCodes.InvalidId),
-                    RequirePositive(card.Count, "sideboard count", DeckstringErrorCodes.InvalidCount),
-                    RequirePositive(
-                        card.OwnerDbfId,
-                        "sideboard owner DBF ID",
-                        DeckstringErrorCodes.InvalidId)));
+                    card.DbfId,
+                    card.Count,
+                    card.OwnerDbfId));
             }
 
             return canonical;
+        }
+
+        /// <summary>
+        /// Validates a deck without throwing for ordinary invalid user data.
+        /// </summary>
+        /// <param name="deck">The deck to validate, or <see langword="null"/>.</param>
+        /// <returns>All validation failures in deterministic model order.</returns>
+        public static ValidationResult Validate(Deck? deck)
+        {
+            var errors = deck == null
+                ? new List<ValidationError>
+                {
+                    new ValidationError(
+                        DeckstringErrorCodes.InvalidDeck,
+                        string.Empty,
+                        "Deck cannot be null."),
+                }
+                : CollectValidationErrors(deck, false);
+            return new ValidationResult(errors);
+        }
+
+        /// <summary>
+        /// Parses a full Hearthstone clipboard export.
+        /// </summary>
+        /// <param name="text">The clipboard text to parse.</param>
+        /// <returns>The canonical deck, deckstring, and locale-neutral metadata.</returns>
+        /// <exception cref="DeckstringException">The export or its deckstring is invalid.</exception>
+        public static DeckExport ParseExport(string text)
+        {
+            if (string.IsNullOrEmpty(text))
+            {
+                throw new DeckstringException(
+                    DeckstringErrorCodes.InvalidInput,
+                    "Deck export cannot be empty.");
+            }
+            if (text.Length > MaxExportUtf8Length)
+            {
+                throw new DeckstringException(
+                    DeckstringErrorCodes.LimitExceeded,
+                    "Deck export exceeds the maximum supported size.");
+            }
+            if (!TextRules.IsWellFormedUnicode(text))
+            {
+                throw new DeckstringException(
+                    DeckstringErrorCodes.InvalidInput,
+                    "Deck export must contain well-formed Unicode.");
+            }
+            if (Encoding.UTF8.GetByteCount(text) > MaxExportUtf8Length)
+            {
+                throw new DeckstringException(
+                    DeckstringErrorCodes.LimitExceeded,
+                    "Deck export exceeds the maximum supported size.");
+            }
+            if (TextRules.IsExportBlank(text))
+            {
+                throw new DeckstringException(
+                    DeckstringErrorCodes.InvalidInput,
+                    "Deck export cannot be empty.");
+            }
+
+            var metadata = new DeckExportMetadata();
+            string? embeddedDeckstring = null;
+            var normalized = text.Replace("\r\n", "\n").Replace('\r', '\n');
+            foreach (var sourceLine in normalized.Split('\n'))
+            {
+                var line = sourceLine;
+                if (TextRules.IsExportBlank(line))
+                {
+                    continue;
+                }
+
+                if (line.StartsWith("###", StringComparison.Ordinal))
+                {
+                    if (embeddedDeckstring != null)
+                    {
+                        throw new DeckstringException(
+                            DeckstringErrorCodes.InvalidInput,
+                            "Deck name must appear before the deckstring.");
+                    }
+                    if (metadata.Name == null)
+                    {
+                        var name = TextRules.TrimExportWhitespace(line.Substring(3));
+                        if (name.Length == 0)
+                        {
+                            throw new DeckstringException(
+                                DeckstringErrorCodes.InvalidInput,
+                                "Deck name cannot be empty.");
+                        }
+
+                        metadata.Name = name;
+                        continue;
+                    }
+                }
+
+                if (line[0] == '#')
+                {
+                    var comment = line.Substring(1);
+                    if (comment.Length != 0 && comment[0] == ' ')
+                    {
+                        comment = comment.Substring(1);
+                    }
+                    metadata.Comments.Add(comment);
+                    continue;
+                }
+
+                if (embeddedDeckstring != null)
+                {
+                    throw new DeckstringException(
+                        DeckstringErrorCodes.InvalidInput,
+                        "Deck export must contain exactly one deckstring.");
+                }
+
+                embeddedDeckstring = TextRules.TrimExportWhitespace(line);
+            }
+
+            if (embeddedDeckstring == null)
+            {
+                throw new DeckstringException(
+                    DeckstringErrorCodes.InvalidInput,
+                    "Deck export does not contain a deckstring.");
+            }
+
+            var deck = Decode(embeddedDeckstring);
+            return new DeckExport(deck, Encode(deck), metadata);
+        }
+
+        /// <summary>
+        /// Formats a deck and optional metadata as deterministic LF clipboard text.
+        /// </summary>
+        /// <param name="deck">The deck to format.</param>
+        /// <param name="metadata">Optional deck name and comments.</param>
+        /// <param name="cardResolver">
+        /// An optional callback that maps a DBF ID to localized display data.
+        /// Missing mappings are omitted from the presentation comments.
+        /// </param>
+        /// <returns>A canonical Hearthstone clipboard export.</returns>
+        /// <exception cref="DeckstringException">The deck or metadata is invalid.</exception>
+        public static string FormatExport(
+            Deck deck,
+            DeckExportMetadata? metadata = null,
+            Func<int, CardDisplay?>? cardResolver = null)
+        {
+            var canonical = Canonicalize(deck);
+            var lines = new List<string>();
+
+            if (metadata?.Name != null)
+            {
+                var name = TextRules.TrimExportWhitespace(
+                    RequireMetadataLine(metadata.Name, "Deck name"));
+                if (name.Length == 0)
+                {
+                    throw new DeckstringException(
+                        DeckstringErrorCodes.InvalidInput,
+                        "Deck name cannot be empty.");
+                }
+                lines.Add("### " + name);
+            }
+
+            if (metadata != null)
+            {
+                foreach (var comment in metadata.Comments)
+                {
+                    AddComment(lines, RequireMetadataLine(comment, "Deck comment"));
+                }
+            }
+
+            if (cardResolver != null)
+            {
+                foreach (var card in canonical.Cards)
+                {
+                    var display = cardResolver(card.DbfId);
+                    if (display != null)
+                    {
+                        AddComment(
+                            lines,
+                            string.Format(
+                                CultureInfo.InvariantCulture,
+                                "{0}x ({1}) {2}",
+                                card.Count,
+                                display.Cost ?? 0,
+                                display.Name));
+                    }
+                }
+
+                foreach (var card in canonical.SideboardCards)
+                {
+                    var display = cardResolver(card.DbfId);
+                    if (display != null)
+                    {
+                        AddComment(
+                            lines,
+                            string.Format(
+                                CultureInfo.InvariantCulture,
+                                "{0}x ({1}) {2} [sideboard:{3}]",
+                                card.Count,
+                                display.Cost ?? 0,
+                                display.Name,
+                                card.OwnerDbfId));
+                    }
+                }
+            }
+
+            if (lines.Count != 0)
+            {
+                lines.Add("#");
+            }
+            lines.Add(Encode(canonical));
+            return string.Join("\n", lines);
+        }
+
+        private static List<ValidationError> CollectValidationErrors(Deck deck, bool allowZeroCounts)
+        {
+            var errors = new List<ValidationError>();
+            if ((long)deck.Heroes.Count + deck.Cards.Count + deck.SideboardCards.Count > MaxItemsPerDeck)
+            {
+                errors.Add(new ValidationError(
+                    DeckstringErrorCodes.LimitExceeded,
+                    string.Empty,
+                    "Deck contains too many items."));
+                return errors;
+            }
+            if (!IsSupportedFormat((int)deck.Format))
+            {
+                errors.Add(new ValidationError(
+                    DeckstringErrorCodes.UnsupportedFormat,
+                    "format",
+                    $"Unsupported format {(int)deck.Format}."));
+            }
+
+            if (deck.Heroes.Count == 0)
+            {
+                errors.Add(new ValidationError(
+                    DeckstringErrorCodes.InvalidCount,
+                    "heroes",
+                    "Deck must contain at least one hero."));
+            }
+            if (deck.Heroes.Count > MaxItemsPerGroup)
+            {
+                errors.Add(new ValidationError(
+                    DeckstringErrorCodes.LimitExceeded,
+                    "heroes",
+                    "Hero group is too large."));
+            }
+
+            var heroes = new HashSet<int>();
+            for (var index = 0; index < deck.Heroes.Count; index++)
+            {
+                var hero = deck.Heroes[index];
+                if (hero <= 0)
+                {
+                    errors.Add(new ValidationError(
+                        DeckstringErrorCodes.InvalidId,
+                        $"heroes[{index}]",
+                        "Hero DBF ID must be positive."));
+                }
+                if (hero > 0 && !heroes.Add(hero))
+                {
+                    errors.Add(new ValidationError(
+                        DeckstringErrorCodes.InvalidDeck,
+                        $"heroes[{index}]",
+                        "Hero DBF IDs must be unique."));
+                }
+            }
+
+            var cards = new HashSet<int>();
+            for (var index = 0; index < deck.Cards.Count; index++)
+            {
+                var card = deck.Cards[index];
+                if (card == null)
+                {
+                    errors.Add(new ValidationError(
+                        DeckstringErrorCodes.InvalidDeck,
+                        $"cards[{index}]",
+                        "Card entry cannot be null."));
+                    continue;
+                }
+                if (card.DbfId <= 0)
+                {
+                    errors.Add(new ValidationError(
+                        DeckstringErrorCodes.InvalidId,
+                        $"cards[{index}][0]",
+                        "Card DBF ID must be positive."));
+                }
+                if (card.Count < 0 || !allowZeroCounts && card.Count == 0)
+                {
+                    errors.Add(new ValidationError(
+                        DeckstringErrorCodes.InvalidCount,
+                        $"cards[{index}][1]",
+                        "Card count must be positive."));
+                }
+                if (allowZeroCounts && card.Count == 0)
+                {
+                    continue;
+                }
+                if (card.DbfId > 0 && !cards.Add(card.DbfId))
+                {
+                    errors.Add(new ValidationError(
+                        DeckstringErrorCodes.InvalidDeck,
+                        $"cards[{index}][0]",
+                        "Card DBF IDs must be unique."));
+                }
+            }
+            AddCardGroupLimitErrors(deck.Cards, errors, "cards");
+
+            var sideboardCards = new HashSet<long>();
+            for (var index = 0; index < deck.SideboardCards.Count; index++)
+            {
+                var card = deck.SideboardCards[index];
+                if (card == null)
+                {
+                    errors.Add(new ValidationError(
+                        DeckstringErrorCodes.InvalidDeck,
+                        $"sideboardCards[{index}]",
+                        "Sideboard entry cannot be null."));
+                    continue;
+                }
+                if (card.DbfId <= 0)
+                {
+                    errors.Add(new ValidationError(
+                        DeckstringErrorCodes.InvalidId,
+                        $"sideboardCards[{index}][0]",
+                        "Sideboard DBF ID must be positive."));
+                }
+                if (card.Count < 0 || !allowZeroCounts && card.Count == 0)
+                {
+                    errors.Add(new ValidationError(
+                        DeckstringErrorCodes.InvalidCount,
+                        $"sideboardCards[{index}][1]",
+                        "Sideboard count must be positive."));
+                }
+                if (card.OwnerDbfId <= 0)
+                {
+                    errors.Add(new ValidationError(
+                        DeckstringErrorCodes.InvalidId,
+                        $"sideboardCards[{index}][2]",
+                        "Sideboard owner DBF ID must be positive."));
+                }
+                if (allowZeroCounts && card.Count == 0)
+                {
+                    continue;
+                }
+
+                var key = ((long)(uint)card.OwnerDbfId << 32) | (uint)card.DbfId;
+                if (card.DbfId > 0 && card.OwnerDbfId > 0 && !sideboardCards.Add(key))
+                {
+                    errors.Add(new ValidationError(
+                        DeckstringErrorCodes.InvalidDeck,
+                        $"sideboardCards[{index}]",
+                        "Sideboard owner and card DBF ID pairs must be unique."));
+                }
+            }
+            AddSideboardGroupLimitErrors(deck.SideboardCards, errors);
+
+            return errors;
+        }
+
+        private static void AddCardGroupLimitErrors(
+            IEnumerable<DeckCard> cards,
+            List<ValidationError> errors,
+            string path)
+        {
+            if (cards.Count(card => card != null && card.Count == 1) > MaxItemsPerGroup ||
+                cards.Count(card => card != null && card.Count == 2) > MaxItemsPerGroup ||
+                cards.Count(card => card != null && card.Count > 2) > MaxItemsPerGroup)
+            {
+                errors.Add(new ValidationError(
+                    DeckstringErrorCodes.LimitExceeded,
+                    path,
+                    "Card item group is too large."));
+            }
+        }
+
+        private static void AddSideboardGroupLimitErrors(
+            IEnumerable<SideboardCard> cards,
+            List<ValidationError> errors)
+        {
+            if (cards.Count(card => card != null && card.Count == 1) > MaxItemsPerGroup ||
+                cards.Count(card => card != null && card.Count == 2) > MaxItemsPerGroup ||
+                cards.Count(card => card != null && card.Count > 2) > MaxItemsPerGroup)
+            {
+                errors.Add(new ValidationError(
+                    DeckstringErrorCodes.LimitExceeded,
+                    "sideboardCards",
+                    "Sideboard item group is too large."));
+            }
+        }
+
+        private static string RequireMetadataLine(string? value, string name)
+        {
+            if (value == null || TextRules.ContainsLineBreak(value))
+            {
+                throw new DeckstringException(
+                    DeckstringErrorCodes.InvalidInput,
+                    $"{name} must be a single line.");
+            }
+
+            return value;
+        }
+
+        private static void AddComment(List<string> lines, string comment)
+        {
+            lines.Add(comment.Length == 0 ? "#" : "# " + comment);
         }
 
         private static bool IsSupportedFormat(int format)

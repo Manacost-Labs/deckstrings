@@ -1,13 +1,13 @@
 [build-system]
-requires = ["setuptools>=77"]
+requires = ["setuptools==80.9.0"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "manacost-deckstrings"
-version = "0.1.0.dev0"
-description = "Dependency-free Hearthstone deckstring encoder and decoder"
+version = "1.0.0"
+description = "Dependency-free Hearthstone deckstring codec, validation, and clipboard export library"
 readme = "README.md"
-requires-python = ">=3.9"
+requires-python = ">=3.10"
 license = "ISC"
 license-files = ["LICENSE"]
 authors = [
@@ -15,10 +15,26 @@ authors = [
 ]
 keywords = ["hearthstone", "deckstrings"]
 classifiers = [
-  "Development Status :: 2 - Pre-Alpha",
+  "Development Status :: 5 - Production/Stable",
   "Programming Language :: Python :: 3",
   "Programming Language :: Python :: 3 :: Only",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Programming Language :: Python :: 3.14",
   "Typing :: Typed"
+]
+
+[project.optional-dependencies]
+dev = [
+  "build==1.5.0",
+  "jsonschema==4.25.1",
+  "mypy==2.3.0",
+  "pytest==9.1.1",
+  "ruff==0.16.2",
+  "setuptools==80.9.0",
+  "twine==7.0.0"
 ]
 
 [project.urls]
@@ -31,3 +47,26 @@ package-dir = { "" = "src" }
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.setuptools.package-data]
+manacost_deckstrings = ["py.typed"]
+
+[tool.pytest.ini_options]
+minversion = "8.4"
+addopts = ["--import-mode=importlib", "--strict-config", "--strict-markers"]
+testpaths = ["tests"]
+
+[tool.ruff]
+target-version = "py310"
+line-length = 88
+
+[tool.ruff.lint]
+select = ["E4", "E7", "E9", "F", "I", "UP", "B", "SIM"]
+
+[tool.mypy]
+python_version = "3.10"
+strict = true
+files = ["src"]
+
+[tool.uv]
+exclude-newer = "2026-08-12T00:00:00Z"

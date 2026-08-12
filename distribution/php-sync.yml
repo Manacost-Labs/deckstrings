@@ -1,0 +1,140 @@
+# This file is the source-of-truth copy of the workflow installed in
+# Manacost-Labs/hearthstone-deckstrings-php/.github/workflows/sync.yml.
+name: Sync PHP package
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "17 * * * *"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: php-package-sync
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    permissions:
+      checks: read
+      contents: write
+    steps:
+      - name: Checkout distribution repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          path: distribution
+          fetch-depth: 0
+
+      - name: Checkout source repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: Manacost-Labs/hearthstone-deckstrings
+          ref: main
+          path: source
+          fetch-depth: 0
+          fetch-tags: true
+
+      - name: Configure release identity
+        run: |
+          git -C distribution config user.name "manacost-labs-release-bot"
+          git -C distribution config user.email "release-bot@users.noreply.github.com"
+
+      - name: Discover verified stable releases
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          : > "${RUNNER_TEMP}/verified-release-tags"
+          gh api --paginate \
+            -H 'Accept: application/vnd.github+json' \
+            "/repos/Manacost-Labs/hearthstone-deckstrings/releases?per_page=100" \
+            --jq '.[] | select(.draft == false and .prerelease == false) | .tag_name' |
+          while IFS= read -r tag; do
+            if [[ ! "${tag}" =~ ^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]; then
+              echo "Ignoring non-stable release tag: ${tag}" >&2
+              continue
+            fi
+
+            release_sha="$(git -C source rev-parse "${tag}^{commit}")"
+            if ! git -C source merge-base --is-ancestor "${release_sha}" origin/main; then
+              echo "Release tag is not contained in source main: ${tag}" >&2
+              exit 1
+            fi
+
+            required_checks=(
+              lint
+              typecheck
+              test
+              build
+              fixtures-schema
+              "php (8.2)"
+              "php (8.3)"
+              "php (8.4)"
+              "php (8.5)"
+              "python (3.10)"
+              "python (3.11)"
+              "python (3.12)"
+              "python (3.13)"
+              "python (3.14)"
+              dotnet
+            )
+            check_runs="$(gh api --paginate \
+              -H 'Accept: application/vnd.github+json' \
+              "/repos/Manacost-Labs/hearthstone-deckstrings/commits/${release_sha}/check-runs?per_page=100" \
+              --jq '.check_runs[] | [.name, .status, .conclusion] | @tsv')"
+            for check_name in "${required_checks[@]}"; do
+              if ! grep -Fqx "${check_name}"$'\tcompleted\tsuccess' <<<"${check_runs}"; then
+                echo "Required successful check is missing for ${tag}: ${check_name}" >&2
+                exit 1
+              fi
+            done
+
+            successful_release_runs="$(gh api \
+              -H 'Accept: application/vnd.github+json' \
+              "/repos/Manacost-Labs/hearthstone-deckstrings/actions/workflows/release.yml/runs?event=release&branch=${tag}&head_sha=${release_sha}&status=success&per_page=100" \
+              --jq ".workflow_runs | map(select(.head_branch == \"${tag}\" and .head_sha == \"${release_sha}\" and .event == \"release\" and .status == \"completed\" and .conclusion == \"success\")) | length")"
+            if [[ "${successful_release_runs}" -lt 1 ]]; then
+              echo "Completed successful release workflow is missing for ${tag}" >&2
+              exit 1
+            fi
+
+            printf '%s\n' "${tag}" >> "${RUNNER_TEMP}/verified-release-tags"
+          done
+
+      - name: Mirror package tags
+        run: |
+          set -euo pipefail
+          while IFS= read -r tag; do
+            if ! git -C source cat-file -e "${tag}:packages/php/composer.json" 2>/dev/null; then
+              continue
+            fi
+            if git -C distribution show-ref --tags --verify --quiet "refs/tags/${tag}"; then
+              continue
+            fi
+
+            export_dir="$(mktemp -d)"
+            git -C source archive "${tag}" packages/php | tar -x -C "${export_dir}"
+            git -C distribution checkout --detach main
+            rsync -a --delete --exclude='.git/' --exclude='.github/' \
+              "${export_dir}/packages/php/" distribution/
+            git -C distribution add --all
+            git -C distribution commit --allow-empty -m "Sync PHP package ${tag}"
+            git -C distribution tag --annotate "${tag}" --message "PHP package ${tag}"
+            git -C distribution checkout main
+            rm -rf "${export_dir}"
+          done < "${RUNNER_TEMP}/verified-release-tags"
+
+      - name: Mirror development branch
+        run: |
+          set -euo pipefail
+          rsync -a --delete --exclude='.git/' --exclude='.github/' \
+            source/packages/php/ distribution/
+          git -C distribution add --all
+          if ! git -C distribution diff --cached --quiet; then
+            git -C distribution commit -m "Sync PHP package from source main"
+          fi
+
+      - name: Push branch and tags
+        run: git -C distribution push origin main --tags

@@ -1,0 +1,437 @@
+name: Release
+
+on:
+  workflow_dispatch:
+  release:
+    types:
+      - published
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.event.release.tag_name || github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    name: Verify release source
+    runs-on: ubuntu-latest
+    permissions:
+      checks: read
+      contents: read
+    outputs:
+      source-sha: ${{ steps.source.outputs.sha }}
+      version: ${{ steps.source.outputs.version }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.release.tag_name || github.sha }}
+          fetch-depth: 0
+
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.13"
+
+      - name: Verify versions and capture source revision
+        id: source
+        env:
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+        run: |
+          set -euo pipefail
+          python scripts/check_versions.py
+          if [[ -n "${RELEASE_TAG}" ]]; then
+            python scripts/check_versions.py --tag "${RELEASE_TAG}"
+          fi
+          echo "sha=$(git rev-parse HEAD)" >> "${GITHUB_OUTPUT}"
+          echo "version=$(python -c 'import json; print(json.load(open("package.json"))["version"])')" >> "${GITHUB_OUTPUT}"
+
+      - name: Verify release commit and required CI
+        if: github.event_name == 'release'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          release_sha="$(git rev-parse HEAD)"
+          git fetch --no-tags origin main:refs/remotes/origin/main
+          git merge-base --is-ancestor "${release_sha}" origin/main
+          required_checks=(
+            lint
+            typecheck
+            test
+            build
+            fixtures-schema
+            "php (8.2)"
+            "php (8.3)"
+            "php (8.4)"
+            "php (8.5)"
+            "python (3.10)"
+            "python (3.11)"
+            "python (3.12)"
+            "python (3.13)"
+            "python (3.14)"
+            dotnet
+          )
+          check_runs="$(gh api --paginate \
+            -H 'Accept: application/vnd.github+json' \
+            "/repos/${GITHUB_REPOSITORY}/commits/${release_sha}/check-runs?per_page=100" \
+            --jq '.check_runs[] | [.name, .status, .conclusion] | @tsv')"
+          for check_name in "${required_checks[@]}"; do
+            if ! grep -Fqx "${check_name}"$'\tcompleted\tsuccess' <<<"${check_runs}"; then
+              echo "Required successful check is missing: ${check_name}" >&2
+              exit 1
+            fi
+          done
+
+  build-npm:
+    name: Build npm artifact
+    needs: verify
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.verify.outputs.source-sha }}
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+          package-manager-cache: false
+
+      - run: corepack enable
+      - run: yarn install --frozen-lockfile --ignore-scripts
+      - run: npm run build
+      - run: npm run test:unit
+      - run: npm run test:package
+      - run: mkdir -p artifacts/npm && npm pack --ignore-scripts --pack-destination artifacts/npm
+
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: npm-artifacts
+          path: artifacts/npm
+          if-no-files-found: error
+          retention-days: 14
+
+  build-python:
+    name: Build Python artifact
+    needs: verify
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.verify.outputs.source-sha }}
+
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.13"
+
+      - uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
+        with:
+          python-version: "3.13"
+          enable-cache: true
+          cache-dependency-glob: packages/python/uv.lock
+
+      - run: uv sync --project packages/python --locked --all-extras
+      - run: uv run --project packages/python --locked --all-extras pytest packages/python/tests -q
+      - run: uv run --project packages/python --locked --all-extras ruff check packages/python
+      - run: uv run --project packages/python --locked --all-extras ruff format --check packages/python
+      - run: uv run --project packages/python --locked --all-extras mypy packages/python/src
+      - run: mkdir -p artifacts/python && uv run --project packages/python --locked --all-extras python -m build packages/python --no-isolation --outdir artifacts/python
+      - run: uv run --project packages/python --locked --all-extras twine check artifacts/python/*
+      - name: Test the built wheel in a clean environment
+        run: |
+          python -m venv "${RUNNER_TEMP}/python-consumer"
+          "${RUNNER_TEMP}/python-consumer/bin/python" -m pip install --no-deps artifacts/python/*.whl
+          "${RUNNER_TEMP}/python-consumer/bin/python" -c 'from manacost_deckstrings import decode, encode, parse_export; value="AAEBAQcBBAMBAgMAAA=="; assert encode(decode(value)) == value; assert parse_export(value)["deckstring"] == value'
+
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: python-artifacts
+          path: artifacts/python
+          if-no-files-found: error
+          retention-days: 14
+
+  build-nuget:
+    name: Build NuGet artifacts
+    needs: verify
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.verify.outputs.source-sha }}
+
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          dotnet-version: |
+            8.0.x
+            10.0.x
+
+      - name: Build library for all target frameworks
+        run: dotnet build packages/dotnet/src/ManacostLabs.Deckstrings/ManacostLabs.Deckstrings.csproj --configuration Release
+      - name: Run .NET 8 and .NET 10 unit tests
+        run: dotnet test packages/dotnet/tests/ManacostLabs.Deckstrings.Tests/ManacostLabs.Deckstrings.Tests.csproj --configuration Release
+      - name: Run all shared fixtures
+        run: dotnet run --project packages/dotnet/tests/ManacostLabs.Deckstrings.Compatibility/ManacostLabs.Deckstrings.Compatibility.csproj --configuration Release -- fixtures/deckstrings.json
+      - name: Pack NuGet and symbols packages
+        run: dotnet pack packages/dotnet/src/ManacostLabs.Deckstrings/ManacostLabs.Deckstrings.csproj --configuration Release --no-build --output artifacts/nuget
+      - name: Install the built package in clean consumers
+        env:
+          RELEASE_VERSION: ${{ needs.verify.outputs.version }}
+        run: |
+          dotnet run --project packages/dotnet/tests/ManacostLabs.Deckstrings.Consumer/ManacostLabs.Deckstrings.Consumer.csproj --configuration Release --framework net8.0 -p:DeckstringsPackageSource="${GITHUB_WORKSPACE}/artifacts/nuget" -p:DeckstringsPackageVersion="${RELEASE_VERSION}"
+          dotnet run --project packages/dotnet/tests/ManacostLabs.Deckstrings.Consumer/ManacostLabs.Deckstrings.Consumer.csproj --configuration Release --framework net10.0 -p:DeckstringsPackageSource="${GITHUB_WORKSPACE}/artifacts/nuget" -p:DeckstringsPackageVersion="${RELEASE_VERSION}"
+
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: nuget-artifacts
+          path: artifacts/nuget
+          if-no-files-found: error
+          retention-days: 14
+
+  test-composer:
+    name: Test Composer package
+    needs: verify
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.verify.outputs.source-sha }}
+
+      - uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240 # v2
+        with:
+          php-version: "8.5"
+          tools: composer:2.10.2
+          coverage: none
+
+      - run: composer validate --strict --check-lock --working-dir=packages/php --no-plugins
+      - run: composer install --working-dir=packages/php --no-interaction --prefer-dist --no-progress --no-scripts --no-plugins
+      - run: composer check --working-dir=packages/php
+      - run: composer audit --locked --working-dir=packages/php --no-plugins
+
+  build-composer:
+    name: Build Composer artifact
+    needs:
+      - verify
+      - test-composer
+    runs-on: ubuntu-latest
+    env:
+      COMPOSER_ROOT_VERSION: ${{ needs.verify.outputs.version }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.verify.outputs.source-sha }}
+
+      - uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240 # v2
+        with:
+          php-version: "8.5"
+          tools: composer:2.10.2
+          coverage: none
+
+      - run: composer validate --strict --check-lock --working-dir=packages/php --no-plugins
+      - name: Build versioned Composer archive
+        env:
+          RELEASE_VERSION: ${{ needs.verify.outputs.version }}
+        run: |
+          mkdir -p artifacts/composer
+          composer archive --working-dir=packages/php --format=zip \
+            --dir="${GITHUB_WORKSPACE}/artifacts/composer" \
+            --file="manacost-labs-hearthstone-deckstrings-${RELEASE_VERSION}" \
+            --no-plugins --no-scripts
+          test -f "artifacts/composer/manacost-labs-hearthstone-deckstrings-${RELEASE_VERSION}.zip"
+
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: composer-artifacts
+          path: artifacts/composer
+          if-no-files-found: error
+          retention-days: 14
+
+  assemble:
+    name: Assemble release artifacts
+    needs:
+      - build-npm
+      - build-python
+      - build-nuget
+      - build-composer
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: npm-artifacts
+          path: artifacts/npm
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: python-artifacts
+          path: artifacts/python
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: nuget-artifacts
+          path: artifacts/nuget
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: composer-artifacts
+          path: artifacts/composer
+
+      - name: Generate SBOM
+        uses: anchore/sbom-action@e22c389904149dbc22b58101806040fa8d37a610 # v0
+        with:
+          path: artifacts
+          format: spdx-json
+          output-file: artifacts/sbom.spdx.json
+          upload-artifact: false
+          upload-release-assets: false
+
+      - name: Generate checksums
+        run: find artifacts -type f ! -name SHA256SUMS -print0 | sort -z | xargs -0 sha256sum > artifacts/SHA256SUMS
+
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: release-artifacts
+          path: artifacts
+          if-no-files-found: error
+          retention-days: 14
+
+  attest:
+    name: Attest release artifacts
+    needs: assemble
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
+      artifact-metadata: write
+    steps:
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: release-artifacts
+          path: artifacts
+
+      - name: Attest release provenance
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        with:
+          subject-path: |
+            artifacts/npm/*
+            artifacts/python/*
+            artifacts/nuget/*
+            artifacts/composer/*
+
+      - name: Attest release SBOM
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        with:
+          subject-path: |
+            artifacts/npm/*
+            artifacts/python/*
+            artifacts/nuget/*
+            artifacts/composer/*
+          sbom-path: artifacts/sbom.spdx.json
+
+  publish-npm:
+    name: Publish npm
+    if: github.event_name == 'release'
+    needs:
+      - assemble
+      - attest
+    runs-on: ubuntu-latest
+    environment:
+      name: release
+      url: https://www.npmjs.com/package/@manacost-labs/deckstrings
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: release-artifacts
+          path: artifacts
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+          package-manager-cache: false
+      - name: Install OIDC-capable npm CLI
+        run: npm install --global npm@11.6.2
+      - run: npm publish artifacts/npm/*.tgz --access public
+
+  publish-pypi:
+    name: Publish PyPI
+    if: github.event_name == 'release'
+    needs:
+      - assemble
+      - attest
+    runs-on: ubuntu-latest
+    environment:
+      name: release
+      url: https://pypi.org/project/manacost-deckstrings/
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: release-artifacts
+          path: artifacts
+      - uses: pypa/gh-action-pypi-publish@dc37677b2e1c63e2034f94d8a5b11f265b73ba33 # release/v1
+        with:
+          packages-dir: artifacts/python
+
+  publish-nuget:
+    name: Publish NuGet
+    if: github.event_name == 'release'
+    needs:
+      - assemble
+      - attest
+    runs-on: ubuntu-latest
+    environment:
+      name: release
+      url: https://www.nuget.org/packages/ManacostLabs.Deckstrings
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: release-artifacts
+          path: artifacts
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          dotnet-version: 10.0.x
+      - name: Request short-lived NuGet key
+        id: login
+        uses: NuGet/login@8d196754b4036150537f80ac539e15c2f1028841 # v1
+        with:
+          user: ${{ vars.NUGET_USER }}
+      - name: Publish package and symbols
+        env:
+          NUGET_API_KEY: ${{ steps.login.outputs.NUGET_API_KEY }}
+        run: |
+          set -euo pipefail
+          mapfile -t packages < <(find artifacts/nuget -maxdepth 1 -type f \
+            -name '*.nupkg' ! -name '*.snupkg' -print)
+          test "${#packages[@]}" -eq 1
+          dotnet nuget push "${packages[0]}" \
+            --api-key "${NUGET_API_KEY}" \
+            --source https://api.nuget.org/v3/index.json \
+            --skip-duplicate
+
+  attach-release-assets:
+    name: Attach GitHub release assets
+    if: github.event_name == 'release'
+    needs:
+      - assemble
+      - attest
+    runs-on: ubuntu-latest
+    environment:
+      name: release
+      url: ${{ github.event.release.html_url }}
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: release-artifacts
+          path: artifacts
+      - name: Upload artifacts to the existing release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+        run: gh release upload "${RELEASE_TAG}" artifacts/**/* artifacts/SHA256SUMS artifacts/sbom.spdx.json

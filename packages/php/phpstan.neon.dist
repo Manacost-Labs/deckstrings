@@ -1,0 +1,7 @@
+parameters:
+    level: max
+    paths:
+        - src
+        - tests/DeckstringsTest.php
+    tmpDir: /tmp/manacost-deckstrings-phpstan
+    treatPhpDocTypesAsCertain: true
