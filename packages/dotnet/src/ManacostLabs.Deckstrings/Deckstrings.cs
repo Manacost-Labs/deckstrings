@@ -375,10 +375,14 @@ namespace ManacostLabs.Deckstrings
         /// <returns>A new validation transport model.</returns>
         public static ValidationResultTransport ToTransport(ValidationResult result)
         {
+#if NET6_0_OR_GREATER
+            ArgumentNullException.ThrowIfNull(result);
+#else
             if (result == null)
             {
                 throw new ArgumentNullException(nameof(result));
             }
+#endif
 
             return new ValidationResultTransport
             {
