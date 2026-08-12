@@ -165,7 +165,10 @@ Every pull request must run:
 Registry publication is not part of ordinary CI. It runs only from a published
 GitHub Release, uses the protected `release` environment, and exchanges GitHub
 OIDC identity for short-lived npm, PyPI, and NuGet credentials. A manual
-workflow run builds, tests, attests, and uploads artifacts without publishing.
+workflow run builds, tests, and attests without publishing. When given the
+reviewed draft tag, it stages those exact assets before publication. The
+published-release run verifies the immutable GitHub assets and sends the same
+bytes to each registry without rebuilding them.
 
 ## Known risks
 

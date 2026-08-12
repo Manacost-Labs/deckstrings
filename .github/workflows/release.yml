@@ -2,6 +2,11 @@ name: Release
 
 on:
   workflow_dispatch:
+    inputs:
+      draft_tag:
+        description: Existing draft release tag to stage after verification (leave empty for a dry-run)
+        required: false
+        type: string
   release:
     types:
       - published
@@ -10,7 +15,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: release-${{ github.event.release.tag_name || github.ref }}
+  group: release-${{ github.event.release.tag_name || inputs.draft_tag || github.ref }}
   cancel-in-progress: false
 
 jobs:
@@ -23,6 +28,7 @@ jobs:
     outputs:
       source-sha: ${{ steps.source.outputs.sha }}
       version: ${{ steps.source.outputs.version }}
+      release-tag: ${{ steps.source.outputs.tag }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -36,7 +42,7 @@ jobs:
       - name: Verify versions and capture source revision
         id: source
         env:
-          RELEASE_TAG: ${{ github.event.release.tag_name }}
+          RELEASE_TAG: ${{ github.event.release.tag_name || inputs.draft_tag }}
           RELEASE_PRERELEASE: ${{ github.event.release.prerelease }}
         run: |
           set -euo pipefail
@@ -50,16 +56,26 @@ jobs:
           fi
           echo "sha=$(git rev-parse HEAD)" >> "${GITHUB_OUTPUT}"
           echo "version=$(python -c 'import json; print(json.load(open("package.json"))["version"])')" >> "${GITHUB_OUTPUT}"
+          echo "tag=${RELEASE_TAG}" >> "${GITHUB_OUTPUT}"
 
       - name: Verify release commit and required CI
-        if: github.event_name == 'release'
+        if: github.event_name == 'release' || inputs.draft_tag != ''
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           release_sha="$(git rev-parse HEAD)"
           git fetch --no-tags origin main:refs/remotes/origin/main
-          git merge-base --is-ancestor "${release_sha}" origin/main
+          main_sha="$(git rev-parse refs/remotes/origin/main)"
+          if [[ "${GITHUB_EVENT_NAME}" == "release" ]]; then
+            if ! git merge-base --is-ancestor "${release_sha}" "${main_sha}"; then
+              echo "Published release commit ${release_sha} is not on main." >&2
+              exit 1
+            fi
+          elif [[ "${release_sha}" != "${main_sha}" ]]; then
+            echo "Draft staging commit ${release_sha} is not the current main commit ${main_sha}." >&2
+            exit 1
+          fi
           required_checks=(
             lint
             typecheck
@@ -76,20 +92,40 @@ jobs:
             "python (3.13)"
             "python (3.14)"
             dotnet
+            "CodeQL (javascript-typescript)"
+            "CodeQL (python)"
+            "CodeQL (csharp)"
           )
-          check_runs="$(gh api --paginate \
+          gh api \
             -H 'Accept: application/vnd.github+json' \
-            "/repos/${GITHUB_REPOSITORY}/commits/${release_sha}/check-runs?per_page=100" \
-            --jq '.check_runs[] | [.name, .status, .conclusion] | @tsv')"
-          for check_name in "${required_checks[@]}"; do
-            if ! grep -Fqx "${check_name}"$'\tcompleted\tsuccess' <<<"${check_runs}"; then
-              echo "Required successful check is missing: ${check_name}" >&2
-              exit 1
-            fi
-          done
+            "/repos/${GITHUB_REPOSITORY}/commits/${release_sha}/check-runs?filter=latest&per_page=100" \
+            > "${RUNNER_TEMP}/check-runs.json"
+          python - "${RUNNER_TEMP}/check-runs.json" "${required_checks[@]}" <<'PY'
+          import json
+          import sys
+
+          path, *required = sys.argv[1:]
+          check_runs = json.load(open(path, encoding="utf-8"))["check_runs"]
+          for name in required:
+              candidates = [
+                  check
+                  for check in check_runs
+                  if check["name"] == name
+                  and check.get("app", {}).get("id") == 15368
+              ]
+              if not candidates:
+                  raise SystemExit(f"Required GitHub Actions check is missing: {name}")
+              latest = max(candidates, key=lambda check: check["id"])
+              if latest["status"] != "completed" or latest["conclusion"] != "success":
+                  raise SystemExit(
+                      f"Latest required check did not succeed: {name} "
+                      f"({latest['status']}/{latest['conclusion']})"
+                  )
+          PY
 
   build-npm:
     name: Build npm artifact
+    if: github.event_name == 'workflow_dispatch'
     needs: verify
     runs-on: ubuntu-latest
     steps:
@@ -118,6 +154,7 @@ jobs:
 
   build-python:
     name: Build Python artifact
+    if: github.event_name == 'workflow_dispatch'
     needs: verify
     runs-on: ubuntu-latest
     steps:
@@ -157,6 +194,7 @@ jobs:
 
   build-nuget:
     name: Build NuGet artifacts
+    if: github.event_name == 'workflow_dispatch'
     needs: verify
     runs-on: ubuntu-latest
     steps:
@@ -194,6 +232,7 @@ jobs:
 
   test-composer:
     name: Test Composer package
+    if: github.event_name == 'workflow_dispatch'
     needs: verify
     runs-on: ubuntu-latest
     steps:
@@ -210,10 +249,23 @@ jobs:
       - run: composer validate --strict --check-lock --no-plugins
       - run: composer install --no-interaction --prefer-dist --no-progress --no-scripts --no-plugins
       - run: composer check
-      - run: composer audit --locked --no-plugins
+      - name: Audit Composer dependencies
+        run: |
+          for attempt in 1 2 3; do
+            if composer audit --locked --no-plugins; then
+              exit 0
+            else
+              status=$?
+            fi
+            if [[ "${status}" -ne 100 || "${attempt}" -eq 3 ]]; then
+              exit "${status}"
+            fi
+            sleep "$((attempt * 5))"
+          done
 
   build-composer:
     name: Build Composer artifact
+    if: github.event_name == 'workflow_dispatch'
     needs:
       - verify
       - test-composer
@@ -237,12 +289,17 @@ jobs:
           RELEASE_VERSION: ${{ needs.verify.outputs.version }}
         run: |
           set -euo pipefail
-          mkdir -p artifacts/composer
+          composer_archive_dir="${RUNNER_TEMP}/composer-artifact"
+          archive_name="manacost-labs-hearthstone-deckstrings-${RELEASE_VERSION}.zip"
+          mkdir -p "${composer_archive_dir}" artifacts/composer
           composer archive --format=zip \
-            --dir="${GITHUB_WORKSPACE}/artifacts/composer" \
+            --dir="${composer_archive_dir}" \
             --file="manacost-labs-hearthstone-deckstrings-${RELEASE_VERSION}" \
             --no-plugins --no-scripts
-          archive="artifacts/composer/manacost-labs-hearthstone-deckstrings-${RELEASE_VERSION}.zip"
+          source_archive="${composer_archive_dir}/${archive_name}"
+          archive="artifacts/composer/${archive_name}"
+          test -f "${source_archive}"
+          mv "${source_archive}" "${archive}"
           test -f "${archive}"
           unzip -Z1 "${archive}" | sed '/\/$/d' | LC_ALL=C sort > "${RUNNER_TEMP}/composer-archive-actual"
           cat > "${RUNNER_TEMP}/composer-archive-expected" <<'EOF'
@@ -288,6 +345,7 @@ jobs:
 
   assemble:
     name: Assemble release artifacts
+    if: github.event_name == 'workflow_dispatch'
     needs:
       - verify
       - build-npm
@@ -356,6 +414,7 @@ jobs:
 
   attest:
     name: Attest release artifacts
+    if: github.event_name == 'workflow_dispatch'
     needs: assemble
     runs-on: ubuntu-latest
     permissions:
@@ -396,12 +455,274 @@ jobs:
             artifacts/*.zip
           sbom-path: artifacts/sbom.spdx.json
 
+  stage-draft-assets:
+    name: Stage verified draft release assets
+    if: github.event_name == 'workflow_dispatch' && inputs.draft_tag != ''
+    needs:
+      - verify
+      - assemble
+      - attest
+    runs-on: ubuntu-latest
+    environment:
+      name: release-staging
+      url: https://github.com/Manacost-Labs/deckstrings/releases
+    permissions:
+      attestations: read
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.verify.outputs.source-sha }}
+
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.13"
+
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: release-artifacts
+          path: artifacts
+
+      - name: Verify bundle and build provenance
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_VERSION: ${{ needs.verify.outputs.version }}
+          SOURCE_SHA: ${{ needs.verify.outputs.source-sha }}
+        run: |
+          set -euo pipefail
+          python scripts/verify_release_bundle.py \
+            --artifacts artifacts \
+            --version "${RELEASE_VERSION}" \
+            --source-sha "${SOURCE_SHA}"
+          verify_build_attestation() {
+            local artifact="$1"
+            for attempt in {1..12}; do
+              if gh attestation verify "${artifact}" \
+                --repo "${GITHUB_REPOSITORY}" \
+                --signer-workflow "${GITHUB_REPOSITORY}/.github/workflows/release.yml" \
+                --source-digest "${SOURCE_SHA}" \
+                --source-ref refs/heads/main \
+                --deny-self-hosted-runners >/dev/null; then
+                return 0
+              fi
+              sleep 5
+            done
+            echo "Build attestation did not verify: ${artifact}" >&2
+            return 1
+          }
+          for artifact in \
+            artifacts/*.tgz \
+            artifacts/*.whl \
+            artifacts/*.tar.gz \
+            artifacts/*.nupkg \
+            artifacts/*.snupkg \
+            artifacts/*.zip; do
+            verify_build_attestation "${artifact}"
+          done
+
+      - name: Upload the exact bundle to the existing draft
+        env:
+          DRAFT_TAG: ${{ needs.verify.outputs.release-tag }}
+          GH_TOKEN: ${{ github.token }}
+          SOURCE_SHA: ${{ needs.verify.outputs.source-sha }}
+        run: |
+          set -euo pipefail
+          gh api --paginate --slurp \
+            "/repos/${GITHUB_REPOSITORY}/releases?per_page=100" \
+            > "${RUNNER_TEMP}/release-pages.json"
+          jq 'add' "${RUNNER_TEMP}/release-pages.json" \
+            > "${RUNNER_TEMP}/releases.json"
+          jq --arg tag "${DRAFT_TAG}" \
+            '[.[] | select(.tag_name == $tag)]' \
+            "${RUNNER_TEMP}/releases.json" > "${RUNNER_TEMP}/matches.json"
+          test "$(jq 'length' "${RUNNER_TEMP}/matches.json")" -eq 1
+          jq '.[0]' "${RUNNER_TEMP}/matches.json" > "${RUNNER_TEMP}/release.json"
+          jq -e \
+            --arg sha "${SOURCE_SHA}" \
+            '.draft == true and .prerelease == false and .immutable == false and .target_commitish == $sha' \
+            "${RUNNER_TEMP}/release.json" >/dev/null
+          release_id="$(jq -r '.id' "${RUNNER_TEMP}/release.json")"
+
+          find artifacts -mindepth 1 -maxdepth 1 -type f \
+            -exec basename {} \; | LC_ALL=C sort > "${RUNNER_TEMP}/expected-assets"
+          jq -r '.assets[].name' "${RUNNER_TEMP}/release.json" \
+            | LC_ALL=C sort > "${RUNNER_TEMP}/existing-assets"
+          LC_ALL=C comm -13 "${RUNNER_TEMP}/expected-assets" "${RUNNER_TEMP}/existing-assets" \
+            > "${RUNNER_TEMP}/unexpected-assets"
+          if [[ -s "${RUNNER_TEMP}/unexpected-assets" ]]; then
+            echo "The draft contains an unexpected release asset." >&2
+            cat "${RUNNER_TEMP}/unexpected-assets" >&2
+            exit 1
+          fi
+
+          while IFS= read -r asset_name; do
+            asset_path="artifacts/${asset_name}"
+            local_digest="sha256:$(sha256sum "${asset_path}" | cut -d ' ' -f 1)"
+            gh api "/repos/${GITHUB_REPOSITORY}/releases/${release_id}" \
+              > "${RUNNER_TEMP}/current-release.json"
+            asset_count="$(jq --arg name "${asset_name}" \
+              '[.assets[] | select(.name == $name)] | length' \
+              "${RUNNER_TEMP}/current-release.json")"
+            if [[ "${asset_count}" -eq 1 ]]; then
+              asset_state="$(jq -r --arg name "${asset_name}" \
+                '.assets[] | select(.name == $name) | .state' \
+                "${RUNNER_TEMP}/current-release.json")"
+              asset_size="$(jq -r --arg name "${asset_name}" \
+                '.assets[] | select(.name == $name) | .size' \
+                "${RUNNER_TEMP}/current-release.json")"
+              if [[ "${asset_state}" == "starter" && "${asset_size}" -eq 0 ]]; then
+                stale_asset_id="$(jq -r --arg name "${asset_name}" \
+                  '.assets[] | select(.name == $name) | .id' \
+                  "${RUNNER_TEMP}/current-release.json")"
+                gh api --method DELETE \
+                  "/repos/${GITHUB_REPOSITORY}/releases/assets/${stale_asset_id}"
+                asset_count=0
+              fi
+            fi
+            if [[ "${asset_count}" -eq 1 ]]; then
+              remote_digest="$(jq -r --arg name "${asset_name}" \
+                '.assets[] | select(.name == $name) | .digest' \
+                "${RUNNER_TEMP}/current-release.json")"
+              if [[ "${asset_state}" != "uploaded" || "${remote_digest}" != "${local_digest}" ]]; then
+                echo "Existing draft asset digest mismatch: ${asset_name}" >&2
+                exit 1
+              fi
+            elif [[ "${asset_count}" -eq 0 ]]; then
+              upload_url="$(jq -r '.upload_url' "${RUNNER_TEMP}/release.json")"
+              upload_url="${upload_url%%\{*}"
+              encoded_name="$(jq -rn --arg name "${asset_name}" '$name | @uri')"
+              gh api --method POST \
+                -H 'Content-Type: application/octet-stream' \
+                --input "${asset_path}" \
+                "${upload_url}?name=${encoded_name}" >/dev/null
+            else
+              echo "Duplicate draft asset name: ${asset_name}" >&2
+              exit 1
+            fi
+          done < "${RUNNER_TEMP}/expected-assets"
+
+          gh api "/repos/${GITHUB_REPOSITORY}/releases/${release_id}" \
+            > "${RUNNER_TEMP}/staged-release.json"
+          jq -e \
+            --arg sha "${SOURCE_SHA}" \
+            --arg tag "${DRAFT_TAG}" \
+            '.draft == true and .prerelease == false and .immutable == false and .tag_name == $tag and .target_commitish == $sha' \
+            "${RUNNER_TEMP}/staged-release.json" >/dev/null
+          jq -r '.assets[].name' "${RUNNER_TEMP}/staged-release.json" \
+            | LC_ALL=C sort > "${RUNNER_TEMP}/staged-assets"
+          diff -u "${RUNNER_TEMP}/expected-assets" "${RUNNER_TEMP}/staged-assets"
+          while IFS= read -r asset_name; do
+            local_digest="sha256:$(sha256sum "artifacts/${asset_name}" | cut -d ' ' -f 1)"
+            remote_digest="$(jq -r --arg name "${asset_name}" \
+              '.assets[] | select(.name == $name) | .digest' \
+              "${RUNNER_TEMP}/staged-release.json")"
+            test "${remote_digest}" = "${local_digest}"
+          done < "${RUNNER_TEMP}/expected-assets"
+
+  verify-published-assets:
+    name: Verify immutable published release assets
+    if: github.event_name == 'release'
+    needs: verify
+    runs-on: ubuntu-latest
+    permissions:
+      attestations: read
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.verify.outputs.source-sha }}
+
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.13"
+
+      - name: Verify immutable release identity
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ needs.verify.outputs.release-tag }}
+          SOURCE_SHA: ${{ needs.verify.outputs.source-sha }}
+        run: |
+          set -euo pipefail
+          gh api "/repos/${GITHUB_REPOSITORY}/releases/tags/${RELEASE_TAG}" \
+            > "${RUNNER_TEMP}/release.json"
+          jq -e \
+            --arg sha "${SOURCE_SHA}" \
+            --arg tag "${RELEASE_TAG}" \
+            '.draft == false and .prerelease == false and .immutable == true and .tag_name == $tag and .target_commitish == $sha' \
+            "${RUNNER_TEMP}/release.json" >/dev/null
+
+          verified=false
+          for attempt in {1..12}; do
+            if gh release verify "${RELEASE_TAG}" \
+              --repo "${GITHUB_REPOSITORY}" >/dev/null; then
+              verified=true
+              break
+            fi
+            sleep 5
+          done
+          if [[ "${verified}" != "true" ]]; then
+            echo "The immutable GitHub Release attestation was not available." >&2
+            exit 1
+          fi
+
+      - name: Download and verify published assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ needs.verify.outputs.release-tag }}
+          RELEASE_VERSION: ${{ needs.verify.outputs.version }}
+          SOURCE_SHA: ${{ needs.verify.outputs.source-sha }}
+        run: |
+          set -euo pipefail
+          mkdir published-assets
+          gh release download "${RELEASE_TAG}" \
+            --repo "${GITHUB_REPOSITORY}" \
+            --dir published-assets
+          python scripts/verify_release_bundle.py \
+            --artifacts published-assets \
+            --version "${RELEASE_VERSION}" \
+            --source-sha "${SOURCE_SHA}"
+
+          gh api "/repos/${GITHUB_REPOSITORY}/releases/tags/${RELEASE_TAG}" \
+            > "${RUNNER_TEMP}/release.json"
+          while IFS= read -r asset_path; do
+            asset_name="$(basename "${asset_path}")"
+            local_digest="sha256:$(sha256sum "${asset_path}" | cut -d ' ' -f 1)"
+            remote_digest="$(jq -r --arg name "${asset_name}" \
+              '.assets[] | select(.name == $name) | .digest' \
+              "${RUNNER_TEMP}/release.json")"
+            test "${remote_digest}" = "${local_digest}"
+            gh release verify-asset "${RELEASE_TAG}" "${asset_path}" \
+              --repo "${GITHUB_REPOSITORY}" >/dev/null
+          done < <(find published-assets -mindepth 1 -maxdepth 1 -type f | LC_ALL=C sort)
+
+          for artifact in \
+            published-assets/*.tgz \
+            published-assets/*.whl \
+            published-assets/*.tar.gz \
+            published-assets/*.nupkg \
+            published-assets/*.snupkg \
+            published-assets/*.zip; do
+            gh attestation verify "${artifact}" \
+              --repo "${GITHUB_REPOSITORY}" \
+              --signer-workflow "${GITHUB_REPOSITORY}/.github/workflows/release.yml" \
+              --source-digest "${SOURCE_SHA}" \
+              --source-ref refs/heads/main \
+              --deny-self-hosted-runners >/dev/null
+          done
+
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: published-release-artifacts
+          path: published-assets
+          if-no-files-found: error
+          retention-days: 14
+
   publish-npm:
     name: Publish npm
     if: github.event_name == 'release'
     needs:
-      - assemble
-      - attest
+      - verify
+      - verify-published-assets
     runs-on: ubuntu-latest
     environment:
       name: release
@@ -412,11 +733,17 @@ jobs:
     steps:
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
-          name: release-artifacts
+          name: published-release-artifacts
           path: artifacts
       - name: Verify downloaded release bundle
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ needs.verify.outputs.release-tag }}
         working-directory: artifacts
-        run: sha256sum --check --strict SHA256SUMS
+        run: |
+          sha256sum --check --strict SHA256SUMS
+          gh release verify-asset "${RELEASE_TAG}" ./*.tgz \
+            --repo "${GITHUB_REPOSITORY}" >/dev/null
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 24
@@ -430,8 +757,8 @@ jobs:
     name: Publish PyPI
     if: github.event_name == 'release'
     needs:
-      - assemble
-      - attest
+      - verify
+      - verify-published-assets
     runs-on: ubuntu-latest
     environment:
       name: release
@@ -442,11 +769,19 @@ jobs:
     steps:
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
-          name: release-artifacts
+          name: published-release-artifacts
           path: artifacts
       - name: Verify downloaded release bundle
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ needs.verify.outputs.release-tag }}
         working-directory: artifacts
-        run: sha256sum --check --strict SHA256SUMS
+        run: |
+          sha256sum --check --strict SHA256SUMS
+          for artifact in ./*.whl ./*.tar.gz; do
+            gh release verify-asset "${RELEASE_TAG}" "${artifact}" \
+              --repo "${GITHUB_REPOSITORY}" >/dev/null
+          done
       - name: Select Python distributions
         run: |
           mkdir python-dist
@@ -459,8 +794,8 @@ jobs:
     name: Publish NuGet
     if: github.event_name == 'release'
     needs:
-      - assemble
-      - attest
+      - verify
+      - verify-published-assets
     runs-on: ubuntu-latest
     environment:
       name: release
@@ -471,11 +806,19 @@ jobs:
     steps:
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
-          name: release-artifacts
+          name: published-release-artifacts
           path: artifacts
       - name: Verify downloaded release bundle
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ needs.verify.outputs.release-tag }}
         working-directory: artifacts
-        run: sha256sum --check --strict SHA256SUMS
+        run: |
+          sha256sum --check --strict SHA256SUMS
+          for artifact in ./*.nupkg ./*.snupkg; do
+            gh release verify-asset "${RELEASE_TAG}" "${artifact}" \
+              --repo "${GITHUB_REPOSITORY}" >/dev/null
+          done
       - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
         with:
           dotnet-version: 10.0.x
@@ -495,29 +838,3 @@ jobs:
           dotnet nuget push "${packages[0]}" \
             --api-key "${NUGET_API_KEY}" \
             --source https://api.nuget.org/v3/index.json
-
-  attach-release-assets:
-    name: Attach GitHub release assets
-    if: github.event_name == 'release'
-    needs:
-      - assemble
-      - attest
-    runs-on: ubuntu-latest
-    environment:
-      name: release
-      url: ${{ github.event.release.html_url }}
-    permissions:
-      contents: write
-    steps:
-      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
-        with:
-          name: release-artifacts
-          path: artifacts
-      - name: Verify downloaded release bundle
-        working-directory: artifacts
-        run: sha256sum --check --strict SHA256SUMS
-      - name: Upload artifacts to the existing release
-        env:
-          GH_TOKEN: ${{ github.token }}
-          RELEASE_TAG: ${{ github.event.release.tag_name }}
-        run: gh release upload "${RELEASE_TAG}" artifacts/*

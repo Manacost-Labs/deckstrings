@@ -66,6 +66,7 @@ jobs:
       - run: corepack enable
       - run: yarn install --frozen-lockfile --ignore-scripts
       - run: npm run build
+      - run: node examples/node/roundtrip.mjs
       - run: npm run test:unit
       - run: npm run test:package
       - run: npm run pack:inspect
@@ -106,7 +107,25 @@ jobs:
       - run: composer validate --strict --check-lock --no-plugins
       - run: composer install --no-interaction --prefer-dist --no-progress --no-scripts --no-plugins
       - run: composer check
-      - run: composer audit --locked --no-plugins
+      - name: Audit Composer dependencies
+        run: |
+          for attempt in 1 2 3; do
+            if composer audit --locked --no-plugins; then
+              exit 0
+            else
+              status=$?
+            fi
+            if [[ "${status}" -ne 100 || "${attempt}" -eq 3 ]]; then
+              exit "${status}"
+            fi
+            sleep "$((attempt * 5))"
+          done
+      - name: Run PHP examples and check framework adapter syntax
+        env:
+          COMPOSER_AUTOLOAD: ${{ github.workspace }}/vendor/autoload.php
+        run: |
+          php examples/php/roundtrip.php
+          php -l examples/php/LaravelDeckController.php
       - name: Build and verify clean Composer archive
         env:
           COMPOSER_ROOT_VERSION: 1.0.0
@@ -179,6 +198,12 @@ jobs:
       - run: uv run --project packages/python --locked --all-extras ruff check packages/python
       - run: uv run --project packages/python --locked --all-extras ruff format --check packages/python
       - run: uv run --project packages/python --locked --all-extras mypy packages/python/src
+      - name: Run Python example and check framework adapter syntax
+        env:
+          PYTHONDONTWRITEBYTECODE: "1"
+        run: |
+          uv run --project packages/python --locked --all-extras python examples/python/roundtrip.py
+          uv run --project packages/python --locked --all-extras python -c 'from pathlib import Path; [compile(path.read_text(), str(path), "exec") for path in Path("examples/python").glob("*.py")]'
       - run: uv run --project packages/python --locked --all-extras python -m build packages/python --no-isolation --outdir "${RUNNER_TEMP}/python-artifact"
       - run: uv run --project packages/python --locked --all-extras twine check "${RUNNER_TEMP}"/python-artifact/*
       - name: Test the built wheel in a clean environment

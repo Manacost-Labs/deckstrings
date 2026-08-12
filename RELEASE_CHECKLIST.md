@@ -2,8 +2,7 @@
 
 Version: `1.0.0`
 Tag: `v1.0.0`
-Source commit: set to the final verified `main` SHA immediately before publishing
-Release workflow run: set to the final successful dry-run and published-release run
+Authoritative source/run evidence: [release issue #10](https://github.com/Manacost-Labs/deckstrings/issues/10)
 
 This checklist is the live operational record for the first production release.
 Do not check an item from intent or configuration alone; record the current SHA,
@@ -13,6 +12,9 @@ run URL, registry URL, and consumer evidence when that item is verified.
 
 - [ ] GitHub environment is named `release`, restricts deployment tags to
       `v*.*.*`, and has the intended reviewer/bypass policy.
+- [ ] GitHub environment `release-staging` is restricted to `main` and has no
+      registry credentials or publisher identity.
+- [ ] Repository immutable releases are enabled before the draft is published.
 - [ ] `@manacost-labs/deckstrings` exists on npm. If it required a one-time
       pre-1.0 bootstrap, that publish used interactive 2FA and any temporary
       credential was removed; local provenance was explicitly disabled and the
@@ -50,6 +52,8 @@ run URL, registry URL, and consumer evidence when that item is verified.
       supported target frameworks.
 - [ ] Examples passed the checks in `examples/README.md`.
 - [ ] Manual `workflow_dispatch` built release artifacts and did not publish.
+- [ ] A second manual run with `draft_tag=v1.0.0` staged the exact eight files
+      in the existing draft without overwriting assets.
 - [ ] Dry-run artifacts contain the correct version, readmes, license,
       types/symbols, and no source-only or secret files.
 
@@ -60,6 +64,8 @@ run URL, registry URL, and consumer evidence when that item is verified.
 - [ ] The release is stable (`prerelease` is false); the workflow rejects a
       prerelease event before any publish job becomes eligible.
 - [ ] The GitHub Release is published; a tag alone is not treated as a release.
+- [ ] The published Release reports `isImmutable=true`; its release attestation
+      and all eight asset attestations verify.
 - [ ] The `release` environment deployment was reviewed and approved.
 - [ ] `.github/workflows/release.yml` completed successfully.
 - [ ] npm OIDC publish completed and provenance is visible.
@@ -69,6 +75,8 @@ run URL, registry URL, and consumer evidence when that item is verified.
       package uploads remain a hard failure unless identical public bytes were
       independently verified and the target job is intentionally skipped.
 - [ ] GitHub release artifacts, checksums, and attestations are present.
+- [ ] npm, PyPI, and NuGet jobs consumed `published-release-artifacts` downloaded
+      from the immutable GitHub Release, not a second build.
 - [ ] Packagist source reference matches the `Manacost-Labs/deckstrings`
       `v1.0.0` tag commit.
 - [ ] Packagist exposes `manacost-labs/hearthstone-deckstrings` version `1.0.0`.
