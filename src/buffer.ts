@@ -1,8 +1,8 @@
-import varint from "varint";
 import { atob, btoa } from "./base64";
 import { DeckstringError } from "./errors";
 
 const MAX_BASE64_LENGTH = 1398104;
+const MAX_DECODED_LENGTH = 1048576;
 const MAX_VARINT = 0x7fffffff;
 
 /** @internal */
@@ -33,12 +33,29 @@ export class BufferWriter extends Iterator {
 	}
 
 	public varint(value: number): void {
-		varint.encode(value, this.buffer, this.index);
-		this.next(varint.encode.bytes);
+		let remaining = value;
+		do {
+			let byte = remaining % 128;
+			remaining = Math.floor(remaining / 128);
+			if (remaining > 0) {
+				byte |= 0x80;
+			}
+			this.buffer[this.index] = byte;
+			this.next();
+		} while (remaining > 0);
 	}
 
-	public toString() {
-		const binary = String.fromCharCode(...this.buffer);
+	public override toString(): string {
+		const chunks: string[] = [];
+		const chunkSize = 0x8000;
+		for (let index = 0; index < this.buffer.length; index += chunkSize) {
+			chunks.push(
+				String.fromCharCode(
+					...this.buffer.slice(index, index + chunkSize)
+				)
+			);
+		}
+		const binary = chunks.join("");
 		return btoa(binary);
 	}
 }
@@ -71,10 +88,16 @@ export class BufferReader extends Iterator {
 		let binary: string;
 		try {
 			binary = atob(string);
-		} catch (error) {
+		} catch {
 			throw new DeckstringError(
 				"invalid_base64",
 				"Deckstring is not valid Base64."
+			);
+		}
+		if (binary.length > MAX_DECODED_LENGTH) {
+			throw new DeckstringError(
+				"limit_exceeded",
+				"Deckstring exceeds the maximum supported size."
 			);
 		}
 		const buffer = new Uint8Array(binary.length);
@@ -95,7 +118,7 @@ export class BufferReader extends Iterator {
 				"Unexpected end of deckstring."
 			);
 		}
-		const value = this.buffer[this.index];
+		const value = this.buffer[this.index]!;
 		this.next();
 		return value;
 	}

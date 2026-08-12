@@ -72,7 +72,8 @@
         "invalid_count",
         "invalid_sideboard",
         "trailing_data",
-        "limit_exceeded"
+        "limit_exceeded",
+        "invalid_deck"
       ]
     }
   }

@@ -1,49 +1,45 @@
 # Manacost Labs Hearthstone Deckstrings
 
 [![CI](https://github.com/Manacost-Labs/hearthstone-deckstrings/actions/workflows/ci.yml/badge.svg)](https://github.com/Manacost-Labs/hearthstone-deckstrings/actions/workflows/ci.yml)
+[![CodeQL](https://github.com/Manacost-Labs/hearthstone-deckstrings/actions/workflows/codeql.yml/badge.svg)](https://github.com/Manacost-Labs/hearthstone-deckstrings/actions/workflows/codeql.yml)
+[![npm](https://img.shields.io/npm/v/@manacost-labs/deckstrings)](https://www.npmjs.com/package/@manacost-labs/deckstrings)
+[![PyPI](https://img.shields.io/pypi/v/manacost-deckstrings)](https://pypi.org/project/manacost-deckstrings/)
+[![NuGet](https://img.shields.io/nuget/v/ManacostLabs.Deckstrings)](https://www.nuget.org/packages/ManacostLabs.Deckstrings)
+[![Packagist](https://img.shields.io/packagist/v/manacost-labs/hearthstone-deckstrings)](https://packagist.org/packages/manacost-labs/hearthstone-deckstrings)
 [![License: ISC](https://img.shields.io/badge/license-ISC-blue.svg)](LICENSE)
-[![Status: alpha](https://img.shields.io/badge/status-alpha-orange.svg)](ROADMAP.md)
 
-A small, deterministic Hearthstone deckstring codec for backend applications.
-The same version 1 wire format is implemented natively for JavaScript,
-TypeScript, PHP, Python, and C#.
+A dependency-free Hearthstone deckstring backend library for JavaScript,
+TypeScript, PHP, Python, and .NET. All four implementations share one public
+contract and the same golden fixtures, including sideboards and full clipboard
+exports.
 
-> **Alpha:** the JavaScript package preserves the upstream API, while the PHP,
-> Python, and .NET packages are under active development and are not published
-> to public registries yet.
+## Install
 
-## Why this fork
+| Ecosystem | Package | Supported runtime |
+| --- | --- | --- |
+| npm | `npm install @manacost-labs/deckstrings` | Node.js 22 or 24+, modern browsers |
+| Composer | `composer require manacost-labs/hearthstone-deckstrings` | PHP 8.2–8.5 |
+| PyPI | `python -m pip install manacost-deckstrings` | Python 3.10–3.14 |
+| NuGet | `dotnet add package ManacostLabs.Deckstrings` | `netstandard2.0`, .NET 8, .NET 10 |
 
-The original [HearthSim project](https://github.com/HearthSim/hearthstone-deckstrings)
-provides the JavaScript codec. This fork keeps that compatibility and adds:
+Package versions advance together. Version `1.0.0` defines the first stable
+cross-language API.
 
-- native, dependency-free backend implementations;
-- one shared JSON contract and fixture suite;
-- byte-for-byte canonical encoding across languages;
-- Wild, Standard, Classic, Twist, and sideboard support;
-- stable machine-readable errors for malformed input;
-- defensive limits for untrusted deckstrings.
+## What the library owns
 
-The codec intentionally does not download card data or validate deck legality.
-Names, images, rotations, and card metadata belong to a separate provider such
-as [HearthstoneJSON](https://hearthstonejson.com/).
+- version 1 deckstring encoding and decoding;
+- Wild, Standard, Classic, and Twist formats;
+- heroes, cards, and sideboards;
+- deterministic canonical ordering;
+- structured validation and stable error codes;
+- parsing and formatting complete Hearthstone clipboard exports;
+- defensive limits for untrusted input.
 
-## Packages
+The core does not download card data, make network requests, or decide whether
+a deck is legal for a patch. Card names and costs can be added at the edge with
+an optional resolver callback.
 
-| Ecosystem | Package | Runtime | Status |
-| --- | --- | --- | --- |
-| npm | `@manacost-labs/deckstrings` (planned) | Node.js / browser | alpha |
-| Composer | `manacost-labs/hearthstone-deckstrings` | PHP 8.1+ | alpha |
-| PyPI | `manacost-deckstrings` | Python 3.9+ | alpha |
-| NuGet | `ManacostLabs.Deckstrings` | `netstandard2.0`, `net8.0` | alpha |
-
-Until the first public release, install the repository from source. Registry
-commands will be added only after the package names and release workflow have
-been approved.
-
-## Shared data model
-
-Every implementation returns the same canonical representation:
+## Shared model
 
 ```json
 {
@@ -54,31 +50,38 @@ Every implementation returns the same canonical representation:
 }
 ```
 
-- `cards`: `[dbfId, count]`;
-- `sideboardCards`: `[dbfId, count, ownerDbfId]`;
+- `cards` entries are `[dbfId, count]`;
+- `sideboardCards` entries are `[dbfId, count, ownerDbfId]`;
 - heroes and cards are sorted by DBF ID;
-- sideboard cards are sorted by owner and then DBF ID.
+- sideboard cards are sorted by owner and then DBF ID;
+- duplicate heroes, cards, and sideboard `(ownerDbfId, dbfId)` pairs are invalid.
 
-The normative definition is [spec/deck.schema.json](spec/deck.schema.json).
+The normative model is [spec/deck.schema.json](spec/deck.schema.json), and the
+wire/error/export contract is documented in [spec/README.md](spec/README.md).
 
 ## JavaScript / TypeScript
 
-```javascript
-import { decode, encode, FormatType } from "deckstrings";
+```ts
+import {
+  FormatType,
+  canonicalize,
+  decode,
+  encode,
+  formatExport,
+  parseExport,
+  validate,
+} from "@manacost-labs/deckstrings";
 
-const deck = {
-	cards: [[1, 2], [2, 2], [3, 2], [4, 1]], // [dbfId, count] pairs
-	sideboardCards: [[5, 1, 90749]], // [dbfId, count, sideboardOwnerDbfId] triplets
-	heroes: [7], // Garrosh Hellscream
-	format: FormatType.FT_WILD, // or FT_STANDARD or FT_CLASSIC
-};
-
-const deckstring = encode(deck);
-console.log(deckstring); // AAEBAQcBBAMBAgMAAQEF/cQFAAA=
-
-const decoded = decode(deckstring);
-console.log(JSON.stringify(deck) === JSON.stringify(decoded)); // true
+const deck = decode("AAEBAQcBBAMBAgMAAA==");
+const result = validate(deck); // { valid, errors }
+const canonical = canonicalize(deck);
+const deckstring = encode(canonical);
+const parsed = parseExport(`### Example\n${deckstring}`);
+const text = formatExport(parsed.deck, parsed.metadata);
 ```
+
+The npm package includes ESM, CommonJS, browser ESM, UMD, and bundled
+TypeScript declarations.
 
 ## PHP
 
@@ -86,17 +89,32 @@ console.log(JSON.stringify(deck) === JSON.stringify(decoded)); // true
 use ManacostLabs\Deckstrings\Deckstrings;
 
 $deck = Deckstrings::decode('AAEBAQcBBAMBAgMAAA==');
-$deckstring = Deckstrings::encode($deck);
+$result = Deckstrings::validate($deck);
+$deckstring = Deckstrings::encode(Deckstrings::canonicalize($deck));
+$parsed = Deckstrings::parseExport("### Example\n{$deckstring}");
+$text = Deckstrings::formatExport($parsed['deck'], $parsed['metadata']);
 ```
 
 ## Python
 
 ```python
-from manacost_deckstrings import decode, encode
+from manacost_deckstrings import (
+    canonicalize,
+    decode,
+    encode,
+    format_export,
+    parse_export,
+    validate,
+)
 
 deck = decode("AAEBAQcBBAMBAgMAAA==")
-deckstring = encode(deck)
+result = validate(deck)
+deckstring = encode(canonicalize(deck))
+parsed = parse_export(f"### Example\n{deckstring}")
+text = format_export(parsed["deck"], parsed["metadata"])
 ```
+
+The Python distribution is typed and ships a `py.typed` marker.
 
 ## C# / .NET
 
@@ -104,61 +122,88 @@ deckstring = encode(deck)
 using ManacostLabs.Deckstrings;
 
 var deck = Deckstrings.Decode("AAEBAQcBBAMBAgMAAA==");
-var deckstring = Deckstrings.Encode(deck);
+var result = Deckstrings.Validate(deck);
+var deckstring = Deckstrings.Encode(Deckstrings.Canonicalize(deck));
+var parsed = Deckstrings.ParseExport($"### Example\n{deckstring}");
+var text = Deckstrings.FormatExport(parsed.Deck, parsed.Metadata);
 ```
 
-## Error handling
+NuGet releases include XML documentation, portable PDBs, Source Link metadata,
+and a separate `.snupkg` symbol package.
 
-Invalid input raises an idiomatic exception with a stable code. Messages are
-human-readable and may improve between releases; code values are the contract.
+## Validation and errors
 
-```javascript
-import { decode, DeckstringError } from "deckstrings";
+`validate`/`Validate` returns ordinary user-input failures and does not throw:
 
-try {
-	decode("not-base64!");
-} catch (error) {
-	if (error instanceof DeckstringError) {
-		console.error(error.code); // invalid_base64
-	}
+```json
+{
+  "valid": false,
+  "errors": [
+    {
+      "code": "invalid_count",
+      "path": "cards[0][1]",
+      "message": "card count must be a positive integer"
+    }
+  ]
 }
 ```
 
-See [the compatibility contract](spec/README.md#stable-error-contract) for all
-codes and limits.
+Encoding, decoding, canonicalization, and export parsing raise an idiomatic
+language exception. Match its stable machine-readable code, not the
+human-readable message. See [docs/API.md](docs/API.md) for language-specific
+names and the complete code list.
 
-## Repository layout
+## Card display resolver
 
-```text
-src/                 JavaScript/TypeScript reference implementation
-packages/php/        Native PHP implementation
-packages/python/     Native Python implementation
-packages/dotnet/     Native C# implementation
-fixtures/            Shared positive and negative test vectors
-spec/                Wire format and JSON schemas
-```
+`formatExport`/`format_export` accepts an optional callback from DBF ID to
+`{ name, cost? }` (or the native equivalent). The callback may return `null`
+for an unknown card. Names must be non-blank single-line strings, and costs
+must be non-negative integers no larger than `2,147,483,647`. The resolver is
+presentation-only and never changes the encoded deckstring.
+
+## Compatibility promise
+
+Every implementation reads [fixtures/deckstrings.json](fixtures/deckstrings.json),
+[fixtures/api.json](fixtures/api.json), and [fixtures/exports.json](fixtures/exports.json)
+directly. A behavior change is not accepted until the shared contract and all
+language jobs agree. Legacy deckstrings without a sideboard marker remain
+supported; encoders always produce canonical output.
 
 ## Development
 
-Every implementation consumes the same fixtures. A change to the binary format,
-canonical model, or error behavior must update the shared contract first.
-
 ```bash
-yarn install --frozen-lockfile
-yarn run type-check
-yarn run build
-yarn run test:mocha
-python -m unittest discover -s packages/python/tests -v
+# JavaScript / TypeScript
+yarn install --frozen-lockfile --ignore-scripts
+npx playwright install chromium
+npm run verify
+
+# Shared schemas
+uv sync --project packages/python --locked --all-extras
+uv run --project packages/python --locked python scripts/validate_fixtures.py
+uv run --project packages/python --locked python scripts/check_versions.py
+
+# PHP
+composer install --working-dir=packages/php --no-scripts --no-plugins
+composer check --working-dir=packages/php
+
+# Python
+uv run --project packages/python --locked pytest packages/python/tests
+uv run --project packages/python --locked ruff check packages/python
+uv run --project packages/python --locked mypy packages/python/src
+
+# .NET
+dotnet test packages/dotnet/tests/ManacostLabs.Deckstrings.Tests/ManacostLabs.Deckstrings.Tests.csproj -c Release
 ```
 
-The complete PHP and .NET matrices run in GitHub Actions. See
-[CONTRIBUTING.md](CONTRIBUTING.md) for the contribution workflow and
-[ROADMAP.md](ROADMAP.md) for release gates.
+See [CONTRIBUTING.md](CONTRIBUTING.md), [the release process](docs/RELEASING.md),
+[the migration guide](docs/MIGRATION.md), and [the roadmap](ROADMAP.md).
 
 ## Credits and license
 
-This repository is a fork of HearthSim's `hearthstone-deckstrings`. The original
-history and attribution are preserved. Changes by Manacost Labs extend the
-project with the shared contract and native backend implementations.
+This repository is a fork of
+[HearthSim/hearthstone-deckstrings](https://github.com/HearthSim/hearthstone-deckstrings).
+The original history and attribution are preserved. Manacost Labs maintains the
+multi-language contract, native backend implementations, packaging, and release
+automation.
 
 Licensed under the [ISC License](LICENSE).

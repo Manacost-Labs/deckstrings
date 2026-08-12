@@ -1,0 +1,133 @@
+{
+  "$schema": "../spec/api-fixtures.schema.json",
+  "canonicalize": [
+    {
+      "name": "sort-and-omit-zero-counts",
+      "deck": {
+        "format": 1,
+        "heroes": [10, 2],
+        "cards": [[4, 1], [1, 0], [3, 2]],
+        "sideboardCards": [[7, 1, 10], [5, 0, 2], [6, 2, 2]]
+      },
+      "expectedDeck": {
+        "format": 1,
+        "heroes": [2, 10],
+        "cards": [[3, 2], [4, 1]],
+        "sideboardCards": [[6, 2, 2], [7, 1, 10]]
+      }
+    },
+    {
+      "name": "reject-duplicate-card",
+      "deck": {
+        "format": 1,
+        "heroes": [7],
+        "cards": [[1, 1], [1, 2]],
+        "sideboardCards": []
+      },
+      "errorCode": "invalid_deck"
+    },
+    {
+      "name": "omit-zero-counts-before-duplicate-checks",
+      "deck": {
+        "format": 1,
+        "heroes": [7],
+        "cards": [[1, 0], [1, 2], [2, 0]],
+        "sideboardCards": [[5, 0, 10], [5, 1, 10], [6, 0, 11]]
+      },
+      "expectedDeck": {
+        "format": 1,
+        "heroes": [7],
+        "cards": [[1, 2]],
+        "sideboardCards": [[5, 1, 10]]
+      }
+    }
+  ],
+  "validate": [
+    {
+      "name": "canonical-deck",
+      "deck": {
+        "format": 1,
+        "heroes": [7],
+        "cards": [[1, 2], [4, 1]],
+        "sideboardCards": []
+      },
+      "valid": true,
+      "errors": []
+    },
+    {
+      "name": "zero-count",
+      "deck": {
+        "format": 1,
+        "heroes": [7],
+        "cards": [[1, 0]],
+        "sideboardCards": []
+      },
+      "valid": false,
+      "errors": [{ "code": "invalid_count", "path": "cards[0][1]" }]
+    },
+    {
+      "name": "duplicate-hero",
+      "deck": {
+        "format": 1,
+        "heroes": [7, 7],
+        "cards": [],
+        "sideboardCards": []
+      },
+      "valid": false,
+      "errors": [{ "code": "invalid_deck", "path": "heroes[1]" }]
+    },
+    {
+      "name": "duplicate-card",
+      "deck": {
+        "format": 1,
+        "heroes": [7],
+        "cards": [[1, 1], [1, 2]],
+        "sideboardCards": []
+      },
+      "valid": false,
+      "errors": [{ "code": "invalid_deck", "path": "cards[1][0]" }]
+    },
+    {
+      "name": "duplicate-sideboard-key",
+      "deck": {
+        "format": 1,
+        "heroes": [7],
+        "cards": [],
+        "sideboardCards": [[5, 1, 10], [5, 2, 10]]
+      },
+      "valid": false,
+      "errors": [{ "code": "invalid_deck", "path": "sideboardCards[1]" }]
+    },
+    {
+      "name": "unsupported-format",
+      "deck": {
+        "format": 5,
+        "heroes": [7],
+        "cards": [],
+        "sideboardCards": []
+      },
+      "valid": false,
+      "errors": [{ "code": "unsupported_format", "path": "format" }]
+    },
+    {
+      "name": "repeated-invalid-ids-do-not-create-duplicate-errors",
+      "deck": {
+        "format": 1,
+        "heroes": [-1, -1],
+        "cards": [[-2, 1], [-2, 1]],
+        "sideboardCards": [[-3, 1, -4], [-3, 1, -4]]
+      },
+      "valid": false,
+      "errors": [
+        { "code": "invalid_id", "path": "heroes[0]" },
+        { "code": "invalid_id", "path": "heroes[1]" },
+        { "code": "invalid_id", "path": "cards[0][0]" },
+        { "code": "invalid_id", "path": "cards[1][0]" },
+        { "code": "invalid_id", "path": "sideboardCards[0][0]" },
+        { "code": "invalid_id", "path": "sideboardCards[0][2]" },
+        { "code": "invalid_id", "path": "sideboardCards[1][0]" },
+        { "code": "invalid_id", "path": "sideboardCards[1][2]" }
+      ]
+    }
+  ]
+}

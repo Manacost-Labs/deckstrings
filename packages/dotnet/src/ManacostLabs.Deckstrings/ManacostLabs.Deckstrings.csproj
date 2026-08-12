@@ -1,21 +1,39 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
-    <TargetFrameworks>netstandard2.0;net8.0</TargetFrameworks>
+    <TargetFrameworks>netstandard2.0;net8.0;net10.0</TargetFrameworks>
     <LangVersion>latest</LangVersion>
     <Nullable>enable</Nullable>
     <ImplicitUsings>disable</ImplicitUsings>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <EnableNETAnalyzers>true</EnableNETAnalyzers>
+    <AnalysisLevel>latest-recommended</AnalysisLevel>
+    <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <Deterministic>true</Deterministic>
+    <ContinuousIntegrationBuild Condition="'$(CI)' == 'true'">true</ContinuousIntegrationBuild>
+    <DebugType>portable</DebugType>
+    <DebugSymbols>true</DebugSymbols>
+    <EmbedUntrackedSources>true</EmbedUntrackedSources>
+    <PublishRepositoryUrl>true</PublishRepositoryUrl>
+    <EnablePackageValidation>true</EnablePackageValidation>
     <PackageId>ManacostLabs.Deckstrings</PackageId>
-    <Version>0.1.0-alpha.1</Version>
+    <Version>1.0.0</Version>
+    <Title>Manacost Labs Hearthstone Deckstrings</Title>
     <Authors>Manacost Labs</Authors>
-    <Description>Dependency-free Hearthstone deckstring encoder and decoder</Description>
-    <PackageTags>hearthstone;deckstrings</PackageTags>
+    <Company>Manacost Labs</Company>
+    <Product>Manacost Labs Hearthstone Deckstrings</Product>
+    <Description>Dependency-free Hearthstone deckstring codec, validator, and clipboard export parser</Description>
+    <PackageTags>hearthstone;deckstrings;codec;csharp;dotnet</PackageTags>
     <PackageLicenseExpression>ISC</PackageLicenseExpression>
     <PackageReadmeFile>README.md</PackageReadmeFile>
     <PackageProjectUrl>https://github.com/Manacost-Labs/hearthstone-deckstrings</PackageProjectUrl>
     <RepositoryUrl>https://github.com/Manacost-Labs/hearthstone-deckstrings.git</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
+    <PackageRequireLicenseAcceptance>false</PackageRequireLicenseAcceptance>
+    <IncludeSymbols>true</IncludeSymbols>
+    <SymbolPackageFormat>snupkg</SymbolPackageFormat>
   </PropertyGroup>
   <ItemGroup>
-    <None Include="../../README.md" Pack="true" PackagePath="/" />
+    <None Include="../../README.md" Pack="true" PackagePath="" />
   </ItemGroup>
 </Project>

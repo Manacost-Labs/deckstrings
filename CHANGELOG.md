@@ -1,19 +1,39 @@
-# Change Log
+# Changelog
+
 All notable changes to this project will be documented in this file.
-This project adheres to [Semantic Versioning](http://semver.org/).
+This project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [Manacost 1.0.0] - 2026-08-12
+
 ### Added
-- Native PHP, Python, and .NET deckstring codecs backed by shared fixtures
-- Shared JSON schemas for canonical decks and compatibility vectors
-- Machine-readable cross-language decoding error codes
-- Negative fixtures for malformed, truncated, oversized, and trailing input
-- Repository roadmap, contributing guide, security policy, and issue templates
+
+- Native PHP, Python, and .NET packages backed by one shared behavioral
+  contract and golden fixture suite.
+- Cross-language `canonicalize`, `validate`, `parseExport`/`parse_export`, and
+  `formatExport`/`format_export` APIs.
+- Full Hearthstone clipboard export parsing and deterministic formatting with
+  optional locale-neutral card display resolvers.
+- Stable machine-readable error codes, JSON Schemas, malformed-input fixtures,
+  and defensive limits for untrusted input.
+- ESM, CommonJS, browser ESM, UMD, and bundled TypeScript declarations for the
+  npm package.
+- Typed Python distribution, NuGet symbols and Source Link metadata, Composer
+  package split, clean consumer examples, and migration/API/release guides.
+- Multi-runtime CI, CodeQL, dependency review, Dependabot, SBOM generation,
+  checksums, and artifact attestations.
 
 ### Changed
-- Hardened the TypeScript decoder with strict Base64, varint, ID, group-size,
-  sideboard-marker, and trailing-data validation
+
+- Renamed the JavaScript distribution to `@manacost-labs/deckstrings` and
+  synchronized all new package versions at `1.0.0`.
+- Modernized the TypeScript build and test toolchain while retaining the
+  canonical version 1 deckstring wire format.
+- Hardened every decoder with strict Base64, varint, ID, duplicate, group-size,
+  sideboard-marker, decoded-size, and trailing-data validation.
+- Defined duplicate heroes, cards, and sideboard owner/card pairs as invalid
+  instead of merging them implicitly.
 
 ## [3.1.1] - 2023-06-28
 ### Fixed
@@ -88,7 +108,8 @@ This project adheres to [Semantic Versioning](http://semver.org/).
 ### Fixed
 - Fix a decoding bug
 
-[Unreleased]: https://github.com/HearthSim/npm-deckstrings/compare/v3.1.1...HEAD
+[Unreleased]: https://github.com/Manacost-Labs/hearthstone-deckstrings/compare/v1.0.0...HEAD
+[Manacost 1.0.0]: https://github.com/Manacost-Labs/hearthstone-deckstrings/releases/tag/v1.0.0
 [3.1.1]: https://github.com/HearthSim/npm-deckstrings/compare/v3.1.0...v3.1.1
 [3.1.0]: https://github.com/HearthSim/npm-deckstrings/compare/v3.0.1...v3.1.0
 [3.0.1]: https://github.com/HearthSim/npm-deckstrings/compare/v3.0.0...v3.0.1

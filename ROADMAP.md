@@ -23,7 +23,7 @@ The codec remains intentionally small and deterministic. It owns:
 - heroes, cards, and sideboards
 - canonical ordering
 - validation of the binary envelope and numeric fields
-- parsing and formatting full text exports in a later milestone
+- parsing and formatting full text exports
 
 The codec does not own card names, images, legality by patch, rotations,
 collections, archetypes, or network access. Those features require a card-data
@@ -78,16 +78,17 @@ vector round-trips byte-for-byte.
 
 Deliverables:
 
-- dependency-free PHP 8.1+ codec with PSR-4 autoloading
-- dependency-free Python 3.9+ codec with a `src` package layout
-- dependency-free .NET codec targeting `netstandard2.0` and `net8.0`
+- dependency-free PHP 8.2–8.5 codec with PSR-4 autoloading
+- dependency-free Python 3.10–3.14 codec with a `src` package layout
+- dependency-free .NET codec targeting `netstandard2.0`, `net8.0`, and
+  `net10.0`
 - language-specific tests reading the same fixture file
 - CI jobs for Node.js, PHP, Python, and .NET
 
 Exit gate: every language decodes every fixture to the same canonical model and
 re-encodes it to the fixture's exact deckstring.
 
-### M2 — Stable public API and validation
+### M2 — Stable public API and validation ✅
 
 Deliverables:
 
@@ -102,7 +103,7 @@ Deliverables:
 Exit gate: error categories and canonicalization results are consistent across
 all languages. Backward-compatibility behavior is documented.
 
-### M3 — Full Hearthstone text export
+### M3 — Full Hearthstone text export ✅
 
 Deliverables:
 
@@ -113,7 +114,7 @@ Deliverables:
 
 Exit gate: full exports round-trip without changing the embedded deckstring.
 
-### M4 — Packaging and releases
+### M4 — Packaging and releases ✅
 
 Deliverables:
 
@@ -137,7 +138,7 @@ Deliverables:
 - synchronized `1.0.0` API contract for the new native packages
 - migration guide from `deckstrings`, `python-hearthstone`, and `HearthDb`
 - documentation examples for Laravel, Django/FastAPI, ASP.NET, and Node.js
-- signed/tagged release after explicit approval
+- GitHub release and synchronized `v1.0.0` tag
 
 Exit gate: no known cross-language fixture mismatches and release artifacts are
 verified from their public registries.
@@ -162,24 +163,25 @@ Every pull request must run:
 - .NET build, shared fixtures, and `dotnet pack`
 - JSON Schema validation for the fixture file
 
-Registry publication is not part of ordinary CI. It requires a version tag,
-configured organization secrets, successful artifact dry runs, and explicit
-release approval.
+Registry publication is not part of ordinary CI. It runs only from a published
+GitHub Release, uses the protected `release` environment, and exchanges GitHub
+OIDC identity for short-lived npm, PyPI, and NuGet credentials. A manual
+workflow run builds, tests, attests, and uploads artifacts without publishing.
 
 ## Known risks
 
-- Existing implementations do not reject exactly the same malformed input.
-- Old deckstrings may omit the sideboard marker entirely.
-- Sideboard entries with counts above two are rare and easy to encode in the
-  wrong field order.
-- Updating the old TypeScript toolchain is necessary but should be isolated
-  from codec behavior changes.
-- Package names may need adjustment based on registry ownership.
+- Cross-registry publication is not atomic, so every publisher and package name
+  must be verified before creating the public GitHub release.
+- A brand-new npm package needs a one-time authenticated bootstrap publication
+  before trusted OIDC publishing can be configured.
+- Old valid deckstrings may omit the sideboard marker; the compatibility suite
+  must retain that legacy fixture permanently.
+- Card data and patch legality remain external dependencies of consumers and
+  are intentionally not covered by the codec contract.
 
-## Immediate backlog
+## Remaining release gate
 
-1. Complete the stable validation and canonicalization APIs.
-2. Expand negative fixtures and add deterministic generated tests.
-3. Modernize the TypeScript build in a separate change.
-4. Add production-grade test and static-analysis tooling per native package.
-5. Reserve package names; do not publish until names and ownership are approved.
+M0–M4 are implemented. M5 is complete only when the same version can be
+installed from npm, Packagist, PyPI, and NuGet in clean consumers and the public
+artifacts match the GitHub release checksums and attestations. The operational
+steps are tracked in [RELEASE_CHECKLIST.md](RELEASE_CHECKLIST.md).

@@ -5,101 +5,164 @@ on:
     branches:
       - main
   pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   lint:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
-      - uses: actions/setup-node@v6
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
-          node-version: 20
-      - run: yarn install --frozen-lockfile
-      - run: yarn run lint
+          node-version: 22
+          cache: yarn
+      - run: corepack enable
+      - run: yarn install --frozen-lockfile --ignore-scripts
+      - run: npm run lint
 
   typecheck:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
-      - uses: actions/setup-node@v6
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
-          node-version: 20
-      - run: yarn install --frozen-lockfile
-      - run: yarn run type-check
+          node-version: 22
+          cache: yarn
+      - run: corepack enable
+      - run: yarn install --frozen-lockfile --ignore-scripts
+      - run: npm run type-check
 
   test:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
-      - uses: actions/setup-node@v6
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
-          node-version: 20
-      - run: yarn install --frozen-lockfile
-      - name: Build
-        run: yarn run build
-      - name: Test with Mocha
-        run: yarn run test:mocha
-      - name: Test with Karma
-        run: yarn run test:karma
+          node-version: 22
+          cache: yarn
+      - run: corepack enable
+      - run: yarn install --frozen-lockfile --ignore-scripts
+      - run: npx --no-install playwright install --with-deps chromium
+      - run: npm run build
+      - run: npm run test:unit
+      - run: npm run test:browser
 
   build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
-      - uses: actions/setup-node@v6
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
-          node-version: 20
-      - run: yarn install --frozen-lockfile
-      - name: Build
-        run: yarn build
+          node-version: 24
+          cache: yarn
+      - run: corepack enable
+      - run: yarn install --frozen-lockfile --ignore-scripts
+      - run: npm run build
+      - run: npm run test:unit
+      - run: npm run test:package
+      - run: npm run pack:inspect
 
   fixtures-schema:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
-      - uses: actions/setup-python@v6
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
-          python-version: '3.13'
-      - run: python -m pip install jsonschema
-      - run: python scripts/validate_fixtures.py
+          python-version: "3.13"
+      - uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
+        with:
+          enable-cache: true
+          cache-dependency-glob: packages/python/uv.lock
+      - run: uv sync --project packages/python --locked --all-extras
+      - run: uv run --project packages/python --locked --all-extras python scripts/validate_fixtures.py
+      - run: python scripts/check_versions.py
 
   php:
     runs-on: ubuntu-latest
     strategy:
+      fail-fast: false
       matrix:
-        php-version: ['8.1', '8.4']
+        php-version:
+          - "8.2"
+          - "8.3"
+          - "8.4"
+          - "8.5"
     steps:
-      - uses: actions/checkout@v6
-      - uses: shivammathur/setup-php@v2
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240 # v2
         with:
           php-version: ${{ matrix.php-version }}
-          tools: composer
-      - run: composer validate --strict packages/php/composer.json
-      - run: php packages/php/tests/compatibility.php
+          tools: composer:2.10.2
+          coverage: none
+      - run: composer validate --strict --check-lock --working-dir=packages/php --no-plugins
+      - run: composer install --working-dir=packages/php --no-interaction --prefer-dist --no-progress --no-scripts --no-plugins
+      - run: composer check --working-dir=packages/php
+      - run: composer audit --locked --working-dir=packages/php --no-plugins
+      - name: Build clean Composer archive
+        run: composer archive --working-dir=packages/php --format=zip --dir="${RUNNER_TEMP}/composer-artifact"
 
   python:
     runs-on: ubuntu-latest
     strategy:
+      fail-fast: false
       matrix:
-        python-version: ['3.9', '3.13']
+        python-version:
+          - "3.10"
+          - "3.11"
+          - "3.12"
+          - "3.13"
+          - "3.14"
     steps:
-      - uses: actions/checkout@v6
-      - uses: actions/setup-python@v6
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: ${{ matrix.python-version }}
-      - run: python -m unittest discover -s packages/python/tests -v
-        env:
-          PYTHONPATH: packages/python/src
-      - run: python -m pip install build
-      - run: python -m build packages/python
+      - uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
+        with:
+          python-version: ${{ matrix.python-version }}
+          enable-cache: true
+          cache-dependency-glob: packages/python/uv.lock
+      - run: uv sync --project packages/python --locked --all-extras
+      - run: uv run --project packages/python --locked --all-extras pytest packages/python/tests -q
+      - run: uv run --project packages/python --locked --all-extras ruff check packages/python
+      - run: uv run --project packages/python --locked --all-extras ruff format --check packages/python
+      - run: uv run --project packages/python --locked --all-extras mypy packages/python/src
+      - run: uv run --project packages/python --locked --all-extras python -m build packages/python --no-isolation --outdir "${RUNNER_TEMP}/python-artifact"
+      - run: uv run --project packages/python --locked --all-extras twine check "${RUNNER_TEMP}"/python-artifact/*
+      - name: Test the built wheel in a clean environment
+        run: |
+          python -m venv "${RUNNER_TEMP}/python-consumer"
+          "${RUNNER_TEMP}/python-consumer/bin/python" -m pip install --no-deps "${RUNNER_TEMP}"/python-artifact/*.whl
+          "${RUNNER_TEMP}/python-consumer/bin/python" -c 'from manacost_deckstrings import decode, encode; value="AAEBAQcBBAMBAgMAAA=="; assert encode(decode(value)) == value'
 
   dotnet:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
-      - uses: actions/setup-dotnet@v5
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
         with:
-          dotnet-version: '8.0.x'
-      - run: dotnet build packages/dotnet/src/ManacostLabs.Deckstrings/ManacostLabs.Deckstrings.csproj --configuration Release
-      - run: dotnet run --project packages/dotnet/tests/ManacostLabs.Deckstrings.Compatibility/ManacostLabs.Deckstrings.Compatibility.csproj --configuration Release -- fixtures/deckstrings.json
-      - run: dotnet pack packages/dotnet/src/ManacostLabs.Deckstrings/ManacostLabs.Deckstrings.csproj --configuration Release --no-build
+          dotnet-version: |
+            8.0.x
+            10.0.x
+      - name: Build library for all target frameworks
+        run: dotnet build packages/dotnet/src/ManacostLabs.Deckstrings/ManacostLabs.Deckstrings.csproj --configuration Release
+      - name: Run .NET 8 and .NET 10 unit tests
+        run: dotnet test packages/dotnet/tests/ManacostLabs.Deckstrings.Tests/ManacostLabs.Deckstrings.Tests.csproj --configuration Release
+      - name: Run all shared fixtures
+        run: dotnet run --project packages/dotnet/tests/ManacostLabs.Deckstrings.Compatibility/ManacostLabs.Deckstrings.Compatibility.csproj --configuration Release -- fixtures/deckstrings.json
+      - name: Pack NuGet and symbols packages
+        run: dotnet pack packages/dotnet/src/ManacostLabs.Deckstrings/ManacostLabs.Deckstrings.csproj --configuration Release --no-build
+      - name: Install the built package in clean consumers
+        run: |
+          package_version="$(dotnet msbuild packages/dotnet/src/ManacostLabs.Deckstrings/ManacostLabs.Deckstrings.csproj -getProperty:Version -verbosity:quiet | tail -1)"
+          package_source="${GITHUB_WORKSPACE}/packages/dotnet/src/ManacostLabs.Deckstrings/bin/Release"
+          dotnet run --project packages/dotnet/tests/ManacostLabs.Deckstrings.Consumer/ManacostLabs.Deckstrings.Consumer.csproj --configuration Release --framework net8.0 -p:DeckstringsPackageSource="${package_source}" -p:DeckstringsPackageVersion="${package_version}"
+          dotnet run --project packages/dotnet/tests/ManacostLabs.Deckstrings.Consumer/ManacostLabs.Deckstrings.Consumer.csproj --configuration Release --framework net10.0 -p:DeckstringsPackageSource="${package_source}" -p:DeckstringsPackageVersion="${package_version}"
