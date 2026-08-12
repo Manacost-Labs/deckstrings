@@ -1,3 +1,6 @@
+/*#if _PLATFORM === "browser"
+// Cross-language fixtures exercise backend packages and run in Node.js.
+//#else */
 const fs = require("fs");
 const path = require("path");
 const { expect } = require("chai");
@@ -23,3 +26,4 @@ describe("cross-language compatibility fixtures", () => {
 		});
 	}
 });
+//#endif
