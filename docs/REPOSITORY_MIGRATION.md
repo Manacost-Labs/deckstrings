@@ -5,16 +5,16 @@ monorepo. It is an attribution and operational ledger, not a release tag.
 
 ## Repositories
 
-- Planned target source of truth: `Manacost-Labs/deckstrings`.
+- Target source of truth: `Manacost-Labs/deckstrings`.
 - Previous source repository: `Manacost-Labs/hearthstone-deckstrings`.
 - Previous Composer distribution repository:
   `Manacost-Labs/hearthstone-deckstrings-php`.
 - Original upstream:
   [HearthSim/hearthstone-deckstrings](https://github.com/HearthSim/hearthstone-deckstrings).
 
-The target must be created as an independent GitHub repository, not as a member
-of the HearthSim fork network. The transfer must preserve the original
-authorship, commit timestamps, ISC license, and full reachable Git history.
+The target is an independent GitHub repository, not a member of the HearthSim
+fork network. The transfer preserves the original authorship, commit
+timestamps, ISC license, and full reachable Git history.
 
 ## Verified baseline
 
@@ -22,9 +22,11 @@ authorship, commit timestamps, ISC license, and full reachable Git history.
   `1a5b9135867027e49ff9eefed120924a50ee24ca`.
 - Successful pre-migration release dry-run: GitHub Actions run
   `31640002151`.
-- Required transfer scope: the complete source history, `main`, and all 19
-  historical tags present at the baseline. Record the verified target refs here
-  after the transfer.
+- Verified target `main` after the initial history transfer:
+  `1a5b9135867027e49ff9eefed120924a50ee24ca` (121 commits).
+- Verified transferred refs: all 19 historical tags. A fresh mirror clone
+  contains 123 commits reachable from `main` plus those tags, including the two
+  commits reachable only through historical tags, and passes `git fsck --full`.
 - No Manacost `v1.0.0` release existed at the baseline; the first stable release
   must be created only from the independent repository after its own CI and
   release dry-run succeed.
