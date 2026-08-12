@@ -202,10 +202,10 @@ jobs:
           tools: composer:2.10.2
           coverage: none
 
-      - run: composer validate --strict --check-lock --working-dir=packages/php --no-plugins
-      - run: composer install --working-dir=packages/php --no-interaction --prefer-dist --no-progress --no-scripts --no-plugins
-      - run: composer check --working-dir=packages/php
-      - run: composer audit --locked --working-dir=packages/php --no-plugins
+      - run: composer validate --strict --check-lock --no-plugins
+      - run: composer install --no-interaction --prefer-dist --no-progress --no-scripts --no-plugins
+      - run: composer check
+      - run: composer audit --locked --no-plugins
 
   build-composer:
     name: Build Composer artifact
@@ -226,17 +226,53 @@ jobs:
           tools: composer:2.10.2
           coverage: none
 
-      - run: composer validate --strict --check-lock --working-dir=packages/php --no-plugins
-      - name: Build versioned Composer archive
+      - run: composer validate --strict --check-lock --no-plugins
+      - name: Build and verify versioned Composer archive
         env:
           RELEASE_VERSION: ${{ needs.verify.outputs.version }}
         run: |
+          set -euo pipefail
           mkdir -p artifacts/composer
-          composer archive --working-dir=packages/php --format=zip \
+          composer archive --format=zip \
             --dir="${GITHUB_WORKSPACE}/artifacts/composer" \
             --file="manacost-labs-hearthstone-deckstrings-${RELEASE_VERSION}" \
             --no-plugins --no-scripts
-          test -f "artifacts/composer/manacost-labs-hearthstone-deckstrings-${RELEASE_VERSION}.zip"
+          archive="artifacts/composer/manacost-labs-hearthstone-deckstrings-${RELEASE_VERSION}.zip"
+          test -f "${archive}"
+          unzip -Z1 "${archive}" | sed '/\/$/d' | LC_ALL=C sort > "${RUNNER_TEMP}/composer-archive-actual"
+          cat > "${RUNNER_TEMP}/composer-archive-expected" <<'EOF'
+          CHANGELOG.md
+          LICENSE
+          README.md
+          SECURITY.md
+          composer.json
+          packages/php/src/DeckstringException.php
+          packages/php/src/Deckstrings.php
+          EOF
+          diff -u "${RUNNER_TEMP}/composer-archive-expected" "${RUNNER_TEMP}/composer-archive-actual"
+          package_dir="${RUNNER_TEMP}/composer-package"
+          consumer_dir="${RUNNER_TEMP}/composer-consumer"
+          mkdir -p "${package_dir}" "${consumer_dir}"
+          unzip -q "${archive}" -d "${package_dir}"
+          cat > "${consumer_dir}/composer.json" <<EOF
+          {
+            "repositories": [
+              {
+                "type": "path",
+                "url": "${package_dir}",
+                "options": { "symlink": false }
+              }
+            ],
+            "require": {
+              "manacost-labs/hearthstone-deckstrings": "dev-main"
+            },
+            "minimum-stability": "dev"
+          }
+          EOF
+          composer install --working-dir="${consumer_dir}" \
+            --no-interaction --prefer-dist --no-progress --no-scripts --no-plugins
+          php -r 'require $argv[1]; $value = "AAEBAQcBBAMBAgMAAA=="; $deck = ManacostLabs\Deckstrings\Deckstrings::decode($value); if (ManacostLabs\Deckstrings\Deckstrings::encode($deck) !== $value) { throw new RuntimeException("Composer consumer round-trip failed."); }' \
+            "${consumer_dir}/vendor/autoload.php"
 
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:

@@ -38,9 +38,9 @@ dev = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/Manacost-Labs/hearthstone-deckstrings"
-Issues = "https://github.com/Manacost-Labs/hearthstone-deckstrings/issues"
-Repository = "https://github.com/Manacost-Labs/hearthstone-deckstrings.git"
+Homepage = "https://github.com/Manacost-Labs/deckstrings"
+Issues = "https://github.com/Manacost-Labs/deckstrings/issues"
+Repository = "https://github.com/Manacost-Labs/deckstrings.git"
 
 [tool.setuptools]
 package-dir = { "" = "src" }

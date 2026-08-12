@@ -13,6 +13,8 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 SEMVER = re.compile(r"^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$")
+COMPOSER_NAME = "manacost-labs/hearthstone-deckstrings"
+COMPOSER_AUTOLOAD = {"ManacostLabs\\Deckstrings\\": "packages/php/src/"}
 
 
 def read_versions() -> dict[str, str]:
@@ -42,6 +44,24 @@ def read_versions() -> dict[str, str]:
     }
 
 
+def validate_composer_manifest() -> list[str]:
+    composer = json.loads((ROOT / "composer.json").read_text(encoding="utf-8"))
+    failures: list[str] = []
+
+    if composer.get("name") != COMPOSER_NAME:
+        failures.append(
+            f"Composer package name is {composer.get('name')!r}, expected {COMPOSER_NAME!r}"
+        )
+    if "version" in composer:
+        failures.append("Composer manifest must derive its version from the Git tag")
+    if composer.get("autoload", {}).get("psr-4") != COMPOSER_AUTOLOAD:
+        failures.append(
+            "Composer PSR-4 autoload must map the public namespace to packages/php/src/"
+        )
+
+    return failures
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument(
@@ -52,11 +72,14 @@ def main() -> int:
 
     versions = read_versions()
     expected = next(iter(versions.values()))
-    failures = [
-        f"{name} uses {version}, expected {expected}"
-        for name, version in versions.items()
-        if version != expected
-    ]
+    failures = validate_composer_manifest()
+    failures.extend(
+        [
+            f"{name} uses {version}, expected {expected}"
+            for name, version in versions.items()
+            if version != expected
+        ]
+    )
 
     if not SEMVER.fullmatch(expected):
         failures.append(f"{expected} is not a stable MAJOR.MINOR.PATCH version")

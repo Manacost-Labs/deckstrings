@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://github.com/Manacost-Labs/hearthstone-deckstrings/spec/fixtures.schema.json",
+  "$id": "https://github.com/Manacost-Labs/deckstrings/spec/fixtures.schema.json",
   "title": "Cross-language Hearthstone deckstring fixtures",
   "type": "object",
   "additionalProperties": false,

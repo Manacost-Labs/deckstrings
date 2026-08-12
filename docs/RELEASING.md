@@ -61,7 +61,7 @@ with these exact identity fields:
 | Field | Value |
 | --- | --- |
 | Organization | `Manacost-Labs` |
-| Repository | `hearthstone-deckstrings` |
+| Repository | `deckstrings` |
 | Workflow file | `release.yml` |
 | Environment | `release` |
 | Allowed action | `npm publish` |
@@ -97,7 +97,7 @@ Under the nuget.org account or organization that owns
 | Field | Value |
 | --- | --- |
 | Repository owner | `Manacost-Labs` |
-| Repository | `hearthstone-deckstrings` |
+| Repository | `deckstrings` |
 | Workflow file | `release.yml` |
 | Environment | `release` |
 
@@ -111,22 +111,22 @@ The job requests `id-token: write`, exchanges that identity through
 NuGet keys expire after one hour. See [Trusted publishing on
 nuget.org](https://learn.microsoft.com/nuget/nuget-org/trusted-publishing).
 
-### Packagist mirror
+### Packagist source
 
-Packagist must track the dedicated distribution repository:
+Packagist must track this monorepo directly:
 
 ```text
-https://github.com/Manacost-Labs/hearthstone-deckstrings-php
+https://github.com/Manacost-Labs/deckstrings
 ```
 
-Do not point Packagist at the monorepo root. The mirror's sync workflow copies
-`packages/php/` from this repository, mirrors stable published GitHub Releases
-with tags matching `vX.Y.Z`, and updates its `main` branch. Before creating a
-mirror tag, it requires the source tag commit to be contained in `main` and all
-required CI checks for that exact commit to have succeeded. It runs hourly and
-can be dispatched manually. Enable the Packagist GitHub hook for prompt
-updates; the manual Packagist update endpoint is a fallback, not the primary
-release path. See the [Packagist
+The root `composer.json` is the public package manifest; PHP source remains in
+`packages/php/src/` through its PSR-4 mapping. Register and verify `dev-main`
+before the first stable tag. Packagist has no GitHub OIDC trusted-publisher
+exchange: it discovers versions from repository tags. For the first release,
+leave automatic GitHub updates disabled until the GitHub release workflow has
+finished, then request a Packagist update manually. If automatic updates are
+enabled later, Packagist may discover a tag before the other registries finish,
+so the partial-release procedure still applies. See the [Packagist
 API](https://packagist.org/apidoc).
 
 ## Version contract
@@ -143,9 +143,10 @@ The tag without its leading `v` must equal all publishable manifest versions:
 - `packages/python/pyproject.toml`;
 - `packages/dotnet/src/ManacostLabs.Deckstrings/ManacostLabs.Deckstrings.csproj`.
 
-Composer derives the version from the same mirrored Git tag and therefore has
-no version field in `composer.json`. Unpublished, draft, prerelease, non-semver,
-off-main, or exact-commit-CI-incomplete source tags are never mirrored.
+Composer derives the version from the same source Git tag and therefore has no
+version field in `composer.json`. Create stable tags only through a published
+GitHub Release targeting a verified commit on `main`; Packagist treats stable
+versions as immutable even if a tag is later moved.
 
 Validate the contract with:
 
@@ -188,9 +189,9 @@ yarn install --frozen-lockfile
 yarn run verify
 npm pack --dry-run --json
 
-composer --working-dir=packages/php install --no-scripts --no-plugins
-composer --working-dir=packages/php validate --strict --check-lock --no-plugins
-composer --working-dir=packages/php check
+composer install --no-scripts --no-plugins
+composer validate --strict --check-lock --no-plugins
+composer check
 
 uv run --project packages/python --locked --all-extras pytest packages/python/tests
 uv run --project packages/python --locked --all-extras mypy packages/python/src
@@ -218,10 +219,10 @@ as an additional consumer-level check.
 6. Confirm `.github/workflows/release.yml` completed, not merely started. Check
    every build, attestation, and upload job, then run the registry smoke tests
    below.
-7. Manually dispatch the mirror workflow in
-   `Manacost-Labs/hearthstone-deckstrings-php`, or wait for the hourly run.
-8. Confirm mirror tag `vX.Y.Z` resolves to files exported from the same source
-   tag, then wait for Packagist to ingest it.
+7. After the workflow succeeds, request a Packagist update if automatic updates
+   are disabled.
+8. Confirm Packagist version `X.Y.Z` resolves to the same `vX.Y.Z` source commit
+   in `Manacost-Labs/deckstrings`.
 
 The workflow builds and uploads artifacts in a job without `id-token: write`.
 A separate job downloads those completed artifacts and creates attestations;
@@ -289,8 +290,8 @@ php -r 'require $argv[1]; $value="AAEBAQcBBAMBAgMAAA=="; $codec="ManacostLabs\\D
   "$deckstrings_composer_smoke/vendor/autoload.php"
 ```
 
-Verify that Packagist links to `Manacost-Labs/hearthstone-deckstrings-php` and
-that its `1.0.0` source reference matches the mirror tag.
+Verify that Packagist links to `Manacost-Labs/deckstrings` and that its `1.0.0`
+source reference matches the GitHub release tag commit.
 
 ## Verify provenance and release assets
 
@@ -298,7 +299,7 @@ For artifacts attached to the GitHub Release, verify GitHub attestations:
 
 ```bash
 gh attestation verify path/to/artifact \
-  --repo Manacost-Labs/hearthstone-deckstrings
+  --repo Manacost-Labs/deckstrings
 ```
 
 Download all package assets, `sbom.spdx.json`, and `SHA256SUMS` from the same
@@ -327,8 +328,8 @@ identity, while GitHub attestations bind release artifacts to this workflow.
 - If identical artifacts cannot be proven, fix the issue and release a new
   patch version.
 - A green build or one successful registry upload is not a completed release.
-  Completion requires npm, PyPI, NuGet, the PHP mirror, Packagist, provenance,
-  and fresh install smoke tests.
+  Completion requires npm, PyPI, NuGet, Packagist, provenance, and fresh install
+  smoke tests.
 
 Use [`RELEASE_CHECKLIST.md`](../RELEASE_CHECKLIST.md) as the short operational
 record for each release.

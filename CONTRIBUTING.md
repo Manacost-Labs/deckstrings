@@ -32,8 +32,8 @@ uv sync --project packages/python --locked --all-extras
 uv run --project packages/python --locked python scripts/validate_fixtures.py
 uv run --project packages/python --locked python scripts/check_versions.py
 
-composer --working-dir=packages/php install --no-scripts --no-plugins
-composer --working-dir=packages/php check
+composer install --no-scripts --no-plugins
+composer check
 
 uv run --project packages/python --locked pytest packages/python/tests
 uv run --project packages/python --locked ruff check packages/python
