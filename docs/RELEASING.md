@@ -4,10 +4,12 @@ This repository publishes one synchronized version to npm, PyPI, NuGet, and
 Packagist. A release is complete only after all four registries expose the same
 version and fresh consumer smoke tests pass.
 
-The intended production path is `.github/workflows/release.yml`. Publishing is
-triggered only by a published GitHub Release whose tag is exactly `vX.Y.Z`.
-Manual `workflow_dispatch` runs build and inspect artifacts but must not publish
-them.
+The intended production path is `.github/workflows/release.yml`. A manual
+`workflow_dispatch` builds, tests, and attests artifacts; with the optional
+`draft_tag` input it also stages the exact eight-file bundle in an existing
+draft Release. Publishing is triggered only by publishing that immutable
+GitHub Release with a tag exactly matching `vX.Y.Z`. The publish run does not
+rebuild packages: it verifies and publishes the immutable Release assets.
 
 ## One-time publisher setup
 
@@ -25,12 +27,23 @@ Create the `release` environment and:
 - use GitHub-hosted runners for OIDC publishing;
 - keep long-lived publish tokens out of repository and environment secrets.
 
+Create a separate `release-staging` environment restricted to the protected
+`main` branch. It may upload verified assets only to an existing draft Release;
+it has no registry identity or long-lived credentials. Keep production registry
+approval on `release`, not on `release-staging`.
+
 Protect stable tags with an active repository tag ruleset matching
 `v*.*.*`. Updating and deleting matching tags must be denied without a bypass;
 published versions are immutable and a release tag must never move to another
 commit. Repository Actions should require full commit SHA pinning and allow only
 GitHub-owned actions plus the explicitly reviewed third-party publishers and
 runtime setup actions used by these workflows.
+
+Enable repository release immutability after the final staging run succeeds and
+before publishing the draft. GitHub locks the tag and assets when the draft is
+published and generates a release attestation. Because immutability applies
+only to future publications, it must be enabled before `vX.Y.Z` is published.
+See [Immutable releases](https://docs.github.com/en/code-security/concepts/supply-chain-security/immutable-releases).
 
 GitHub evaluates environment protection before the publish job runs. See
 [Deployments and environments](https://docs.github.com/en/actions/reference/workflows-and-actions/deployments-and-environments).
@@ -176,11 +189,23 @@ Never move or reuse a published tag. Registry versions are immutable.
    builds and inspects artifacts without publishing.
 7. Download the dry-run artifacts and check filenames, contents, versions,
    licenses, readmes, symbols/types, and checksums.
+8. Create a draft Release with the exact stable tag and the full verified
+   `main` SHA as its target. Do not publish it and do not create the tag first.
+9. Dispatch `release.yml` from `main` with `draft_tag=vX.Y.Z`. The staging job
+   refuses prereleases, old commits, unexpected assets, digest mismatches, and
+   incomplete CI or CodeQL results; it never overwrites an asset.
+10. Confirm the staging run completed and the draft contains exactly six
+    distributions, `SHA256SUMS`, and `sbom.spdx.json`. Then enable immutable
+    releases for the repository.
 
-On a published Release, the workflow independently verifies that the tag
-commit is contained in `main` and that every required language-matrix check
-for that exact commit completed successfully. It also installs each built
-artifact in a clean consumer before any publish job becomes eligible.
+Staging verifies that the source is the exact current `main` commit. Publication
+independently verifies that the same staged commit remains on `main` and that
+every required language-matrix and CodeQL check for it completed successfully.
+This keeps an already reviewed draft releasable if unrelated work reaches
+`main` before the immutable Release is published. If the release must include
+those newer changes, prepare and stage a new matching draft instead. The
+workflow installs every built artifact in a clean consumer before it can be
+staged.
 
 ### Local verification
 
@@ -216,28 +241,30 @@ as an additional consumer-level check.
 
 ## Publish
 
-1. In GitHub, draft a new Release targeting the verified `main` commit.
-2. Create or select the exact tag `vX.Y.Z`; the title should also identify
-   `X.Y.Z`.
-3. Paste reviewed release notes. Do not mark a stable release as a prerelease;
-   the workflow fails its source-verification job when `prerelease` is true.
-4. Publish the GitHub Release. Creating or pushing a tag alone does not invoke
+1. Confirm the four registry publisher records, `NUGET_USER`, Packagist source,
+   successful staging run, and enabled release immutability.
+2. Reconfirm that the draft targets the exact full SHA from its successful
+   staging run, has tag `vX.Y.Z`, is not a prerelease, and contains exactly the
+   eight staged assets. That SHA must still be on `main`.
+3. Publish the existing draft. Creating or pushing a tag alone does not invoke
    the production publishing path.
-5. Review and approve the job waiting on the `release` environment.
-6. Confirm `.github/workflows/release.yml` completed, not merely started. Check
-   every build, attestation, and upload job, then run the registry smoke tests
-   below.
+4. The workflow must first verify `isImmutable=true`, the GitHub Release
+   attestation, every release-asset digest, `SHA256SUMS`, SPDX content, and the
+   build provenance tied to the exact source commit. It then uploads those same
+   immutable bytes as the current run's `published-release-artifacts`.
+5. Review and approve the jobs waiting on the protected `release` environment.
+   npm, PyPI, and NuGet consume only `published-release-artifacts`; no package is
+   rebuilt after publication.
+6. Confirm `.github/workflows/release.yml` completed, not merely started, then
+   run the registry smoke tests below.
 7. After the workflow succeeds, request a Packagist update if automatic updates
-   are disabled.
-8. Confirm Packagist version `X.Y.Z` resolves to the same `vX.Y.Z` source commit
-   in `Manacost-Labs/deckstrings`.
+   are disabled and confirm version `X.Y.Z` resolves to the same tag commit.
 
-The workflow builds and uploads artifacts in a job without `id-token: write`.
-A separate job downloads those completed artifacts and creates attestations;
-publish jobs download the same artifact set. The attestation job requires
-`contents: read`, `id-token: write`, `attestations: write`, and
-`artifact-metadata: write`. Release-asset jobs separately require
-`contents: write`. See [Using artifact attestations](https://docs.github.com/en/actions/how-tos/secure-your-work/use-artifact-attestations/use-artifact-attestations).
+The staging build and attestation jobs use the minimum permissions needed for
+their phase. Only `stage-draft-assets` receives `contents: write`, and it can
+only add missing matching assets to a verified draft. The production verifier
+is read-only; registry jobs receive OIDC only after the immutable release assets
+pass verification. See [Using artifact attestations](https://docs.github.com/en/actions/how-tos/secure-your-work/use-artifact-attestations/use-artifact-attestations).
 
 ## Registry smoke tests
 
@@ -303,18 +330,37 @@ source reference matches the GitHub release tag commit.
 
 ## Verify provenance and release assets
 
-For artifacts attached to the GitHub Release, verify GitHub attestations:
+First verify the immutable GitHub Release and its release attestation:
+
+```bash
+gh release verify v1.0.0 --repo Manacost-Labs/deckstrings
+```
+
+For each downloaded asset, verify that it belongs to that Release:
+
+```bash
+gh release verify-asset v1.0.0 path/to/asset \
+  --repo Manacost-Labs/deckstrings
+```
+
+For the six distributions, also verify the build-workflow attestation:
 
 ```bash
 gh attestation verify path/to/artifact \
-  --repo Manacost-Labs/deckstrings
+  --repo Manacost-Labs/deckstrings \
+  --signer-workflow Manacost-Labs/deckstrings/.github/workflows/release.yml \
+  --source-ref refs/heads/main \
+  --deny-self-hosted-runners
 ```
 
 Download all package assets, `sbom.spdx.json`, and `SHA256SUMS` from the same
 GitHub Release into one directory, then verify them directly:
 
 ```bash
-shasum -a 256 -c SHA256SUMS
+python scripts/verify_release_bundle.py \
+  --artifacts path/to/downloaded-assets \
+  --version 1.0.0 \
+  --source-sha FULL_40_CHARACTER_RELEASE_SHA
 ```
 
 The SPDX 2.3 SBOM must describe four packages and the six npm, PyPI, NuGet,
