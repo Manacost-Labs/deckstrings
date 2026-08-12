@@ -289,6 +289,7 @@ jobs:
           RELEASE_VERSION: ${{ needs.verify.outputs.version }}
           SOURCE_SHA: ${{ needs.verify.outputs.source-sha }}
         run: |
+          python -m unittest discover -s scripts/tests -p 'test_*.py'
           python scripts/generate_release_metadata.py \
             --artifacts artifacts \
             --version "${RELEASE_VERSION}" \
@@ -298,15 +299,17 @@ jobs:
             -i artifacts/sbom.spdx.json
           test "$(jq '.packages | length' artifacts/sbom.spdx.json)" -eq 4
           test "$(jq '.files | length' artifacts/sbom.spdx.json)" -eq 6
-          checksum_dir="$(mktemp -d)"
-          find artifacts -mindepth 2 -type f -exec cp {} "${checksum_dir}/" \;
-          cp artifacts/sbom.spdx.json artifacts/SHA256SUMS "${checksum_dir}/"
-          (cd "${checksum_dir}" && sha256sum --check SHA256SUMS)
+          test "$(jq '[.relationships[] | select(.relationshipType == "DISTRIBUTION_ARTIFACT")] | length' artifacts/sbom.spdx.json)" -eq 6
+          mkdir release-bundle
+          find artifacts -mindepth 2 -type f -exec cp {} release-bundle/ \;
+          cp artifacts/sbom.spdx.json artifacts/SHA256SUMS release-bundle/
+          test "$(find release-bundle -mindepth 1 -maxdepth 1 -type f | wc -l)" -eq 8
+          (cd release-bundle && sha256sum --check --strict SHA256SUMS)
 
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: release-artifacts
-          path: artifacts
+          path: release-bundle
           if-no-files-found: error
           retention-days: 14
 
@@ -325,23 +328,31 @@ jobs:
           name: release-artifacts
           path: artifacts
 
+      - name: Verify downloaded release bundle
+        working-directory: artifacts
+        run: sha256sum --check --strict SHA256SUMS
+
       - name: Attest release provenance
         uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
         with:
           subject-path: |
-            artifacts/npm/*
-            artifacts/python/*
-            artifacts/nuget/*
-            artifacts/composer/*
+            artifacts/*.tgz
+            artifacts/*.whl
+            artifacts/*.tar.gz
+            artifacts/*.nupkg
+            artifacts/*.snupkg
+            artifacts/*.zip
 
       - name: Attest release SBOM
         uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
         with:
           subject-path: |
-            artifacts/npm/*
-            artifacts/python/*
-            artifacts/nuget/*
-            artifacts/composer/*
+            artifacts/*.tgz
+            artifacts/*.whl
+            artifacts/*.tar.gz
+            artifacts/*.nupkg
+            artifacts/*.snupkg
+            artifacts/*.zip
           sbom-path: artifacts/sbom.spdx.json
 
   publish-npm:
@@ -362,6 +373,9 @@ jobs:
         with:
           name: release-artifacts
           path: artifacts
+      - name: Verify downloaded release bundle
+        working-directory: artifacts
+        run: sha256sum --check --strict SHA256SUMS
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 24
@@ -369,7 +383,7 @@ jobs:
           package-manager-cache: false
       - name: Install OIDC-capable npm CLI
         run: npm install --global npm@11.6.2
-      - run: npm publish artifacts/npm/*.tgz --access public
+      - run: npm publish artifacts/*.tgz --access public
 
   publish-pypi:
     name: Publish PyPI
@@ -389,9 +403,16 @@ jobs:
         with:
           name: release-artifacts
           path: artifacts
+      - name: Verify downloaded release bundle
+        working-directory: artifacts
+        run: sha256sum --check --strict SHA256SUMS
+      - name: Select Python distributions
+        run: |
+          mkdir python-dist
+          cp artifacts/*.whl artifacts/*.tar.gz python-dist/
       - uses: pypa/gh-action-pypi-publish@dc37677b2e1c63e2034f94d8a5b11f265b73ba33 # release/v1
         with:
-          packages-dir: artifacts/python
+          packages-dir: python-dist
 
   publish-nuget:
     name: Publish NuGet
@@ -411,6 +432,9 @@ jobs:
         with:
           name: release-artifacts
           path: artifacts
+      - name: Verify downloaded release bundle
+        working-directory: artifacts
+        run: sha256sum --check --strict SHA256SUMS
       - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
         with:
           dotnet-version: 10.0.x
@@ -424,7 +448,7 @@ jobs:
           NUGET_API_KEY: ${{ steps.login.outputs.NUGET_API_KEY }}
         run: |
           set -euo pipefail
-          mapfile -t packages < <(find artifacts/nuget -maxdepth 1 -type f \
+          mapfile -t packages < <(find artifacts -maxdepth 1 -type f \
             -name '*.nupkg' ! -name '*.snupkg' -print)
           test "${#packages[@]}" -eq 1
           dotnet nuget push "${packages[0]}" \
@@ -449,8 +473,11 @@ jobs:
         with:
           name: release-artifacts
           path: artifacts
+      - name: Verify downloaded release bundle
+        working-directory: artifacts
+        run: sha256sum --check --strict SHA256SUMS
       - name: Upload artifacts to the existing release
         env:
           GH_TOKEN: ${{ github.token }}
           RELEASE_TAG: ${{ github.event.release.tag_name }}
-        run: gh release upload "${RELEASE_TAG}" artifacts/**/* artifacts/SHA256SUMS artifacts/sbom.spdx.json
+        run: gh release upload "${RELEASE_TAG}" artifacts/*

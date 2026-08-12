@@ -68,12 +68,69 @@ class ReleaseMetadataTests(unittest.TestCase):
                 )
             )
             self.assertEqual(
-                {package["name"] for package in sbom["packages"]},
                 {
-                    "@manacost-labs/deckstrings",
-                    "manacost-deckstrings",
-                    "ManacostLabs.Deckstrings",
-                    "manacost-labs/hearthstone-deckstrings",
+                    (
+                        package["name"],
+                        package["versionInfo"],
+                        package["externalRefs"][0]["referenceLocator"],
+                    )
+                    for package in sbom["packages"]
+                },
+                {
+                    (
+                        "@manacost-labs/deckstrings",
+                        "1.0.0",
+                        "pkg:npm/%40manacost-labs/deckstrings@1.0.0",
+                    ),
+                    (
+                        "manacost-deckstrings",
+                        "1.0.0",
+                        "pkg:pypi/manacost-deckstrings@1.0.0",
+                    ),
+                    (
+                        "ManacostLabs.Deckstrings",
+                        "1.0.0",
+                        "pkg:nuget/ManacostLabs.Deckstrings@1.0.0",
+                    ),
+                    (
+                        "manacost-labs/hearthstone-deckstrings",
+                        "1.0.0",
+                        "pkg:composer/manacost-labs/hearthstone-deckstrings@1.0.0",
+                    ),
+                },
+            )
+            distribution_relationships = {
+                (relationship["spdxElementId"], relationship["relatedSpdxElement"])
+                for relationship in sbom["relationships"]
+                if relationship["relationshipType"] == "DISTRIBUTION_ARTIFACT"
+            }
+            self.assertEqual(
+                distribution_relationships,
+                {
+                    (
+                        "SPDXRef-Package-npm",
+                        "SPDXRef-File-manacost-labs-deckstrings-1.0.0.tgz",
+                    ),
+                    (
+                        "SPDXRef-Package-pypi",
+                        "SPDXRef-File-manacost-deckstrings-1.0.0-py3-none-any.whl",
+                    ),
+                    (
+                        "SPDXRef-Package-pypi",
+                        "SPDXRef-File-manacost-deckstrings-1.0.0.tar.gz",
+                    ),
+                    (
+                        "SPDXRef-Package-nuget",
+                        "SPDXRef-File-ManacostLabs.Deckstrings.1.0.0.nupkg",
+                    ),
+                    (
+                        "SPDXRef-Package-nuget",
+                        "SPDXRef-File-ManacostLabs.Deckstrings.1.0.0.snupkg",
+                    ),
+                    (
+                        "SPDXRef-Package-composer",
+                        "SPDXRef-File-manacost-labs-hearthstone-deckstrings-1.0.0.zip",
+                    ),
                 },
             )
 
@@ -102,6 +159,17 @@ class ReleaseMetadataTests(unittest.TestCase):
 
             self.assertNotEqual(result.returncode, 0)
             self.assertIn("unexpected artifacts: unexpected.txt", result.stderr)
+
+    def test_rejects_nested_release_metadata(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            self.create_artifacts(root)
+            (root / "python/SHA256SUMS").write_text("unexpected")
+
+            result = self.run_script(root)
+
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("unexpected artifacts: python/SHA256SUMS", result.stderr)
 
 
 if __name__ == "__main__":

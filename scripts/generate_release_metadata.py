@@ -111,11 +111,13 @@ def validate_inputs(
     }
     actual: dict[str, Path] = {}
     for path in artifacts.rglob("*"):
-        if not path.is_file() or path.name in {"SHA256SUMS", "sbom.spdx.json"}:
+        if not path.is_file():
+            continue
+        relative_path = path.relative_to(artifacts).as_posix()
+        if relative_path in {"SHA256SUMS", "sbom.spdx.json"}:
             continue
         if path.is_symlink():
             raise ValueError(f"release artifact must not be a symlink: {path}")
-        relative_path = path.relative_to(artifacts).as_posix()
         actual[relative_path] = path
 
     missing = sorted(expected - actual.keys())
@@ -201,6 +203,14 @@ def build_sbom(
                 "relatedSpdxElement": component.spdx_id,
             }
         )
+        for artifact_path in component.artifact_paths(version):
+            relationships.append(
+                {
+                    "spdxElementId": component.spdx_id,
+                    "relationshipType": "DISTRIBUTION_ARTIFACT",
+                    "relatedSpdxElement": file_ids[artifact_path],
+                }
+            )
     created = (
         datetime.now(timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z")
     )
