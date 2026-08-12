@@ -1,0 +1,64 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/Manacost-Labs/hearthstone-deckstrings/spec/deck.schema.json",
+  "title": "Canonical Hearthstone deck definition",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["format", "heroes", "cards", "sideboardCards"],
+  "properties": {
+    "format": {
+      "type": "integer",
+      "enum": [1, 2, 3, 4]
+    },
+    "heroes": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "$ref": "#/$defs/dbfId"
+      }
+    },
+    "cards": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/card"
+      }
+    },
+    "sideboardCards": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/sideboardCard"
+      }
+    }
+  },
+  "$defs": {
+    "dbfId": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "count": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "card": {
+      "type": "array",
+      "minItems": 2,
+      "maxItems": 2,
+      "prefixItems": [
+        { "$ref": "#/$defs/dbfId" },
+        { "$ref": "#/$defs/count" }
+      ],
+      "items": false
+    },
+    "sideboardCard": {
+      "type": "array",
+      "minItems": 3,
+      "maxItems": 3,
+      "prefixItems": [
+        { "$ref": "#/$defs/dbfId" },
+        { "$ref": "#/$defs/count" },
+        { "$ref": "#/$defs/dbfId" }
+      ],
+      "items": false
+    }
+  }
+}

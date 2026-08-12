@@ -2,3 +2,9 @@
 node_modules/
 npm-debug.log
 .rpt2_cache/
+__pycache__/
+*.egg-info/
+packages/python/build/
+packages/python/dist/
+packages/dotnet/**/bin/
+packages/dotnet/**/obj/

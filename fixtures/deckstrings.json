@@ -1,0 +1,76 @@
+{
+  "$schema": "../spec/fixtures.schema.json",
+  "valid": [
+    {
+      "name": "wild-basic",
+      "deckstring": "AAEBAQcBBAMBAgMAAA==",
+      "deck": {
+        "format": 1,
+        "heroes": [7],
+        "cards": [[1, 2], [2, 2], [3, 2], [4, 1]],
+        "sideboardCards": []
+      }
+    },
+    {
+      "name": "standard-basic",
+      "deckstring": "AAECAQcBBAMBAgMAAA==",
+      "deck": {
+        "format": 2,
+        "heroes": [7],
+        "cards": [[1, 2], [2, 2], [3, 2], [4, 1]],
+        "sideboardCards": []
+      }
+    },
+    {
+      "name": "classic-basic",
+      "deckstring": "AAEDAQcBBAMBAgMAAA==",
+      "deck": {
+        "format": 3,
+        "heroes": [7],
+        "cards": [[1, 2], [2, 2], [3, 2], [4, 1]],
+        "sideboardCards": []
+      }
+    },
+    {
+      "name": "twist-basic",
+      "deckstring": "AAEEAQcBBAMBAgMAAA==",
+      "deck": {
+        "format": 4,
+        "heroes": [7],
+        "cards": [[1, 2], [2, 2], [3, 2], [4, 1]],
+        "sideboardCards": []
+      }
+    },
+    {
+      "name": "sideboard-basic",
+      "deckstring": "AAEBAQcBBAMBAgMAAQEF/cQFAAA=",
+      "deck": {
+        "format": 1,
+        "heroes": [7],
+        "cards": [[1, 2], [2, 2], [3, 2], [4, 1]],
+        "sideboardCards": [[5, 1, 90749]]
+      }
+    },
+    {
+      "name": "sideboard-n-copy",
+      "deckstring": "AAEBAQcBBAECAQEDAQEH/cQFAQb9xAUBBQP9xAU=",
+      "deck": {
+        "format": 1,
+        "heroes": [7],
+        "cards": [[1, 3], [2, 2], [4, 1]],
+        "sideboardCards": [[5, 3, 90749], [6, 2, 90749], [7, 1, 90749]]
+      }
+    },
+    {
+      "name": "legacy-without-sideboard-marker",
+      "deckstring": "AAEBAQcBBAMBAgMA",
+      "canonicalDeckstring": "AAEBAQcBBAMBAgMAAA==",
+      "deck": {
+        "format": 1,
+        "heroes": [7],
+        "cards": [[1, 2], [2, 2], [3, 2], [4, 1]],
+        "sideboardCards": []
+      }
+    }
+  ]
+}

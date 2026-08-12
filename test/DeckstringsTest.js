@@ -196,12 +196,12 @@ describe("encode", () => {
 		).to.throw();
 	});
 
-	it("throws an error when format is not 1, 2 or 3", () => {
+	it("throws an error when format is not supported", () => {
 		expect(() =>
 			encode(Object.assign({}, CANONICAL_DEFINITION, { format: "1" }))
 		).to.throw();
 		expect(() =>
-			encode(Object.assign({}, CANONICAL_DEFINITION, { format: 4 }))
+			encode(Object.assign({}, CANONICAL_DEFINITION, { format: 5 }))
 		).to.throw();
 		expect(() =>
 			encode(Object.assign({}, CANONICAL_DEFINITION, { format: [1] }))

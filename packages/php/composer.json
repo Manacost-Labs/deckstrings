@@ -1,0 +1,25 @@
+{
+  "name": "manacost-labs/hearthstone-deckstrings",
+  "description": "Dependency-free Hearthstone deckstring encoder and decoder",
+  "type": "library",
+  "license": "ISC",
+  "keywords": [
+    "hearthstone",
+    "deckstrings"
+  ],
+  "require": {
+    "php": ">=8.1"
+  },
+  "autoload": {
+    "psr-4": {
+      "ManacostLabs\\Deckstrings\\": "src/"
+    }
+  },
+  "scripts": {
+    "test": "@php tests/compatibility.php"
+  },
+  "support": {
+    "issues": "https://github.com/Manacost-Labs/hearthstone-deckstrings/issues",
+    "source": "https://github.com/Manacost-Labs/hearthstone-deckstrings"
+  }
+}

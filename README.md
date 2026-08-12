@@ -3,6 +3,18 @@
 
 Decode and encode Hearthstone [deckstrings](https://hearthsim.info/docs/deckstrings/).
 
+## Manacost Labs multi-language development
+
+This fork is evolving the codec into a family of native backend packages for
+TypeScript/JavaScript, PHP, Python, and .NET. All implementations share one
+wire-format specification and one set of golden compatibility fixtures.
+
+- See [ROADMAP.md](ROADMAP.md) for the delivery plan and release gates.
+- See [spec/README.md](spec/README.md) for the shared compatibility contract.
+- Native packages under `packages/` are pre-release and are not published yet.
+
+The original npm API remains available while the shared contract is developed.
+
 A mapping between DBF ids and cards can be found at [HearthstoneJSON](https://hearthstonejson.com/).
 
 Any deckstring or deck definition returned by this library will be "canonical": The cards and heroes are sorted by DBF id in ascending order.

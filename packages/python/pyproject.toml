@@ -1,0 +1,33 @@
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "manacost-deckstrings"
+version = "0.1.0.dev0"
+description = "Dependency-free Hearthstone deckstring encoder and decoder"
+readme = "README.md"
+requires-python = ">=3.9"
+license = "ISC"
+license-files = ["LICENSE"]
+authors = [
+  { name = "Manacost Labs" }
+]
+keywords = ["hearthstone", "deckstrings"]
+classifiers = [
+  "Development Status :: 2 - Pre-Alpha",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3 :: Only",
+  "Typing :: Typed"
+]
+
+[project.urls]
+Homepage = "https://github.com/Manacost-Labs/hearthstone-deckstrings"
+Issues = "https://github.com/Manacost-Labs/hearthstone-deckstrings/issues"
+Repository = "https://github.com/Manacost-Labs/hearthstone-deckstrings.git"
+
+[tool.setuptools]
+package-dir = { "" = "src" }
+
+[tool.setuptools.packages.find]
+where = ["src"]
