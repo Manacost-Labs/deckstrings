@@ -4,6 +4,17 @@ This project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [Unreleased]
 
+### Added
+- Native PHP, Python, and .NET deckstring codecs backed by shared fixtures
+- Shared JSON schemas for canonical decks and compatibility vectors
+- Machine-readable cross-language decoding error codes
+- Negative fixtures for malformed, truncated, oversized, and trailing input
+- Repository roadmap, contributing guide, security policy, and issue templates
+
+### Changed
+- Hardened the TypeScript decoder with strict Base64, varint, ID, group-size,
+  sideboard-marker, and trailing-data validation
+
 ## [3.1.1] - 2023-06-28
 ### Fixed
 - Fixed with Twist format being rejected

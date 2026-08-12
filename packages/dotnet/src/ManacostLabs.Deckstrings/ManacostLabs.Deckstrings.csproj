@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFrameworks>netstandard2.0;net8.0</TargetFrameworks>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <PackageId>ManacostLabs.Deckstrings</PackageId>
+    <Version>0.1.0-alpha.1</Version>
+    <Authors>Manacost Labs</Authors>
+    <Description>Dependency-free Hearthstone deckstring encoder and decoder</Description>
+    <PackageTags>hearthstone;deckstrings</PackageTags>
+    <PackageLicenseExpression>ISC</PackageLicenseExpression>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <PackageProjectUrl>https://github.com/Manacost-Labs/hearthstone-deckstrings</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/Manacost-Labs/hearthstone-deckstrings.git</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+  </PropertyGroup>
+  <ItemGroup>
+    <None Include="../../README.md" Pack="true" PackagePath="/" />
+  </ItemGroup>
+</Project>

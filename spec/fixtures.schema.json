@@ -1,0 +1,79 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/Manacost-Labs/hearthstone-deckstrings/spec/fixtures.schema.json",
+  "title": "Cross-language Hearthstone deckstring fixtures",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["$schema", "valid", "invalid"],
+  "properties": {
+    "$schema": {
+      "type": "string"
+    },
+    "valid": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["name", "deckstring", "deck"],
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1
+          },
+          "deckstring": {
+            "type": "string",
+            "minLength": 1
+          },
+          "canonicalDeckstring": {
+            "type": "string",
+            "minLength": 1
+          },
+          "deck": {
+            "$ref": "deck.schema.json"
+          }
+        }
+      }
+    },
+    "invalid": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["name", "deckstring", "errorCode"],
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1
+          },
+          "deckstring": {
+            "type": "string"
+          },
+          "errorCode": {
+            "$ref": "#/$defs/errorCode"
+          }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "errorCode": {
+      "type": "string",
+      "enum": [
+        "invalid_input",
+        "invalid_base64",
+        "unexpected_end",
+        "invalid_reserved",
+        "unsupported_version",
+        "unsupported_format",
+        "invalid_varint",
+        "invalid_id",
+        "invalid_count",
+        "invalid_sideboard",
+        "trailing_data",
+        "limit_exceeded"
+      ]
+    }
+  }
+}
