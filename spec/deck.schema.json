@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://github.com/Manacost-Labs/hearthstone-deckstrings/spec/deck.schema.json",
+  "$id": "https://github.com/Manacost-Labs/deckstrings/spec/deck.schema.json",
   "title": "Canonical Hearthstone deck definition",
   "type": "object",
   "additionalProperties": false,

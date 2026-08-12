@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://github.com/Manacost-Labs/hearthstone-deckstrings/spec/export-fixtures.schema.json",
+  "$id": "https://github.com/Manacost-Labs/deckstrings/spec/export-fixtures.schema.json",
   "title": "Cross-language Hearthstone clipboard export fixtures",
   "type": "object",
   "additionalProperties": false,

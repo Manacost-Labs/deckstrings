@@ -32,8 +32,8 @@ used by installed consumers.
 ### PHP
 
 ```bash
-composer --working-dir=packages/php install
-COMPOSER_AUTOLOAD="$(pwd)/packages/php/vendor/autoload.php" \
+composer install
+COMPOSER_AUTOLOAD="$(pwd)/vendor/autoload.php" \
   php examples/php/roundtrip.php
 php -l examples/php/LaravelDeckController.php
 ```

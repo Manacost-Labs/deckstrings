@@ -19,8 +19,8 @@ This project adheres to [Semantic Versioning](https://semver.org/).
   and defensive limits for untrusted input.
 - ESM, CommonJS, browser ESM, UMD, and bundled TypeScript declarations for the
   npm package.
-- Typed Python distribution, NuGet symbols and Source Link metadata, Composer
-  package split, clean consumer examples, and migration/API/release guides.
+- Typed Python distribution, NuGet symbols and Source Link metadata, a root
+  Composer package, clean consumer examples, and migration/API/release guides.
 - Multi-runtime CI, CodeQL, dependency review, Dependabot, SBOM generation,
   checksums, and artifact attestations.
 
@@ -108,8 +108,8 @@ This project adheres to [Semantic Versioning](https://semver.org/).
 ### Fixed
 - Fix a decoding bug
 
-[Unreleased]: https://github.com/Manacost-Labs/hearthstone-deckstrings/compare/v1.0.0...HEAD
-[Manacost 1.0.0]: https://github.com/Manacost-Labs/hearthstone-deckstrings/releases/tag/v1.0.0
+[Unreleased]: https://github.com/Manacost-Labs/deckstrings/compare/v1.0.0...HEAD
+[Manacost 1.0.0]: https://github.com/Manacost-Labs/deckstrings/releases/tag/v1.0.0
 [3.1.1]: https://github.com/HearthSim/npm-deckstrings/compare/v3.1.0...v3.1.1
 [3.1.0]: https://github.com/HearthSim/npm-deckstrings/compare/v3.0.1...v3.1.0
 [3.0.1]: https://github.com/HearthSim/npm-deckstrings/compare/v3.0.0...v3.0.1

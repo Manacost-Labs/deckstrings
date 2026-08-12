@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://github.com/Manacost-Labs/hearthstone-deckstrings/spec/validation-result.schema.json",
+  "$id": "https://github.com/Manacost-Labs/deckstrings/spec/validation-result.schema.json",
   "title": "Deck validation result",
   "type": "object",
   "additionalProperties": false,

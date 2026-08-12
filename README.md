@@ -1,7 +1,7 @@
 # Manacost Labs Hearthstone Deckstrings
 
-[![CI](https://github.com/Manacost-Labs/hearthstone-deckstrings/actions/workflows/ci.yml/badge.svg)](https://github.com/Manacost-Labs/hearthstone-deckstrings/actions/workflows/ci.yml)
-[![CodeQL](https://github.com/Manacost-Labs/hearthstone-deckstrings/actions/workflows/codeql.yml/badge.svg)](https://github.com/Manacost-Labs/hearthstone-deckstrings/actions/workflows/codeql.yml)
+[![CI](https://github.com/Manacost-Labs/deckstrings/actions/workflows/ci.yml/badge.svg)](https://github.com/Manacost-Labs/deckstrings/actions/workflows/ci.yml)
+[![CodeQL](https://github.com/Manacost-Labs/deckstrings/actions/workflows/codeql.yml/badge.svg)](https://github.com/Manacost-Labs/deckstrings/actions/workflows/codeql.yml)
 [![npm](https://img.shields.io/npm/v/@manacost-labs/deckstrings)](https://www.npmjs.com/package/@manacost-labs/deckstrings)
 [![PyPI](https://img.shields.io/pypi/v/manacost-deckstrings)](https://pypi.org/project/manacost-deckstrings/)
 [![NuGet](https://img.shields.io/nuget/v/ManacostLabs.Deckstrings)](https://www.nuget.org/packages/ManacostLabs.Deckstrings)
@@ -183,8 +183,8 @@ uv run --project packages/python --locked python scripts/validate_fixtures.py
 uv run --project packages/python --locked python scripts/check_versions.py
 
 # PHP
-composer install --working-dir=packages/php --no-scripts --no-plugins
-composer check --working-dir=packages/php
+composer install --no-scripts --no-plugins
+composer check
 
 # Python
 uv run --project packages/python --locked pytest packages/python/tests
@@ -200,10 +200,11 @@ See [CONTRIBUTING.md](CONTRIBUTING.md), [the release process](docs/RELEASING.md)
 
 ## Credits and license
 
-This repository is a fork of
+This is an independent Manacost Labs repository whose complete Git history is
+derived from and preserves attribution to
 [HearthSim/hearthstone-deckstrings](https://github.com/HearthSim/hearthstone-deckstrings).
-The original history and attribution are preserved. Manacost Labs maintains the
-multi-language contract, native backend implementations, packaging, and release
-automation.
+Manacost Labs maintains the multi-language contract, native backend
+implementations, packaging, and release automation. Repository migration details
+are recorded in [docs/REPOSITORY_MIGRATION.md](docs/REPOSITORY_MIGRATION.md).
 
 Licensed under the [ISC License](LICENSE).

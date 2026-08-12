@@ -26,8 +26,8 @@
     <PackageTags>hearthstone;deckstrings;codec;csharp;dotnet</PackageTags>
     <PackageLicenseExpression>ISC</PackageLicenseExpression>
     <PackageReadmeFile>README.md</PackageReadmeFile>
-    <PackageProjectUrl>https://github.com/Manacost-Labs/hearthstone-deckstrings</PackageProjectUrl>
-    <RepositoryUrl>https://github.com/Manacost-Labs/hearthstone-deckstrings.git</RepositoryUrl>
+    <PackageProjectUrl>https://github.com/Manacost-Labs/deckstrings</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/Manacost-Labs/deckstrings.git</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
     <PackageRequireLicenseAcceptance>false</PackageRequireLicenseAcceptance>
     <IncludeSymbols>true</IncludeSymbols>

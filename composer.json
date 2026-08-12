@@ -1,0 +1,97 @@
+{
+	"name": "manacost-labs/hearthstone-deckstrings",
+	"description": "Dependency-free Hearthstone deckstring codec, validation, and clipboard export library",
+	"type": "library",
+	"license": "ISC",
+	"homepage": "https://github.com/Manacost-Labs/deckstrings",
+	"keywords": [
+		"hearthstone",
+		"deckstrings"
+	],
+	"require": {
+		"php": ">=8.2 <8.6"
+	},
+	"require-dev": {
+		"phpstan/phpstan": "^2.1",
+		"phpunit/phpunit": "^11.5 || ^12.0"
+	},
+	"autoload": {
+		"psr-4": {
+			"ManacostLabs\\Deckstrings\\": "packages/php/src/"
+		}
+	},
+	"autoload-dev": {
+		"psr-4": {
+			"ManacostLabs\\Deckstrings\\Tests\\": "packages/php/tests/"
+		}
+	},
+	"scripts": {
+		"test:compatibility": "@php packages/php/tests/compatibility.php",
+		"test:unit": "phpunit --configuration packages/php/phpunit.xml.dist",
+		"test": [
+			"@test:compatibility",
+			"@test:unit"
+		],
+		"analyse": "phpstan analyse --configuration packages/php/phpstan.neon.dist --no-progress",
+		"check": [
+			"@test",
+			"@analyse"
+		]
+	},
+	"config": {
+		"allow-plugins": false,
+		"platform": {
+			"php": "8.2.0"
+		},
+		"sort-packages": true
+	},
+	"archive": {
+		"exclude": [
+			"/.editorconfig",
+			"/.github",
+			"/.gitignore",
+			"/.mypy_cache",
+			"/.npmignore",
+			"/.pytest_cache",
+			"/.ruff_cache",
+			"/CONTRIBUTING.md",
+			"/RELEASE_CHECKLIST.md",
+			"/ROADMAP.md",
+			"/composer.lock",
+			"/coverage",
+			"/dist",
+			"/distribution",
+			"/docs",
+			"/examples",
+			"/fixtures",
+			"/node_modules",
+			"/package.json",
+			"/packages/dotnet",
+			"/packages/php/.phpunit.cache",
+			"/packages/php/LICENSE",
+			"/packages/php/README.md",
+			"/packages/php/dist",
+			"/packages/php/phpstan.neon.dist",
+			"/packages/php/phpunit.xml.dist",
+			"/packages/php/tests",
+			"/packages/php/vendor",
+			"/packages/python",
+			"/rollup.config.mjs",
+			"/scripts",
+			"/spec",
+			"/src",
+			"/test",
+			"/tsconfig.build.json",
+			"/tsconfig.json",
+			"/vitest.config.ts",
+			"/vendor",
+			"/yarn.lock"
+		]
+	},
+	"support": {
+		"issues": "https://github.com/Manacost-Labs/deckstrings/issues",
+		"source": "https://github.com/Manacost-Labs/deckstrings"
+	},
+	"minimum-stability": "stable",
+	"prefer-stable": true
+}

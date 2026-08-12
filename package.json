@@ -8,9 +8,9 @@
 		"deck-code",
 		"codec"
 	],
-	"homepage": "https://github.com/Manacost-Labs/hearthstone-deckstrings#readme",
+	"homepage": "https://github.com/Manacost-Labs/deckstrings#readme",
 	"bugs": {
-		"url": "https://github.com/Manacost-Labs/hearthstone-deckstrings/issues"
+		"url": "https://github.com/Manacost-Labs/deckstrings/issues"
 	},
 	"license": "ISC",
 	"author": "Benedict Etzel <benedict@hearthsim.net>",
@@ -48,7 +48,7 @@
 	"sideEffects": false,
 	"repository": {
 		"type": "git",
-		"url": "git+https://github.com/Manacost-Labs/hearthstone-deckstrings.git"
+		"url": "git+https://github.com/Manacost-Labs/deckstrings.git"
 	},
 	"scripts": {
 		"clean": "node -e \"require('node:fs').rmSync('dist', { recursive: true, force: true })\"",

@@ -34,10 +34,10 @@ DBF ID and returns `{"name": "Card", "cost": 3}` or `None`.
 ## Errors
 
 The returned dictionary follows the shared
-[deck schema](https://github.com/Manacost-Labs/hearthstone-deckstrings/blob/main/spec/deck.schema.json).
+[deck schema](https://github.com/Manacost-Labs/deckstrings/blob/main/spec/deck.schema.json).
 
 Invalid input raises `DeckstringError`. Its `code` attribute follows the shared
-[error contract](https://github.com/Manacost-Labs/hearthstone-deckstrings/blob/main/spec/README.md);
+[error contract](https://github.com/Manacost-Labs/deckstrings/blob/main/spec/README.md);
 callers should not match the human-readable message.
 
 The package is release-ready for PyPI. Published releases use semantic

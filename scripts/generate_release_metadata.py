@@ -12,7 +12,7 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 
-REPOSITORY = "Manacost-Labs/hearthstone-deckstrings"
+REPOSITORY = "Manacost-Labs/deckstrings"
 SEMVER = re.compile(r"^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$")
 SOURCE_SHA = re.compile(r"^[0-9a-f]{40}$")
 BUILD_ID = re.compile(r"^[A-Za-z0-9._-]+$")

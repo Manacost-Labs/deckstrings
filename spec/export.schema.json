@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://github.com/Manacost-Labs/hearthstone-deckstrings/spec/export.schema.json",
+  "$id": "https://github.com/Manacost-Labs/deckstrings/spec/export.schema.json",
   "title": "Parsed Hearthstone clipboard export",
   "type": "object",
   "additionalProperties": false,

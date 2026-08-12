@@ -32,9 +32,10 @@ provider and should be separate packages.
 ## Repository model
 
 ```text
+composer.json             Root Packagist package manifest
 fixtures/                 Cross-language golden test vectors
 spec/                     Wire format and shared JSON contract
-packages/php/             Native PHP package
+packages/php/             Native PHP source and tests
 packages/python/          Native Python package
 packages/dotnet/          Native .NET package
 src/                      Existing TypeScript reference implementation
@@ -119,10 +120,8 @@ Exit gate: full exports round-trip without changing the embedded deckstring.
 Deliverables:
 
 - npm, Packagist, PyPI, and NuGet package metadata
-- automated subtree splits for registries such as Packagist that require the
-  package manifest at the repository root
-- read-only release repositories only if a registry cannot consume this
-  monorepo directly; this fork remains the source of truth
+- a root Composer manifest so Packagist consumes this monorepo directly
+- one independent source repository for all four package ecosystems
 - reproducible package builds
 - changelog generation and release checklist
 - provenance/SBOM where supported

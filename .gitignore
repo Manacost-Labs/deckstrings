@@ -3,6 +3,7 @@
 node_modules/
 npm-debug.log
 .rpt2_cache/
+/vendor/
 __pycache__/
 *.egg-info/
 .mypy_cache/

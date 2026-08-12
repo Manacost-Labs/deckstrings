@@ -14,7 +14,7 @@ Release workflow run: `________________`
       credential was removed; local provenance was explicitly disabled and the
       bootstrap did not use the `latest` tag.
 - [ ] npm trusted publisher for `@manacost-labs/deckstrings` matches
-      `Manacost-Labs/hearthstone-deckstrings`, `release.yml`, environment
+      `Manacost-Labs/deckstrings`, `release.yml`, environment
       `release`, and allows `npm publish`.
 - [ ] PyPI trusted publisher for `manacost-deckstrings` matches the same
       repository, workflow, and environment.
@@ -24,10 +24,10 @@ Release workflow run: `________________`
       publishing policy.
 - [ ] No npm, PyPI, or NuGet long-lived publish token is used by the release
       workflow.
-- [ ] Packagist tracks
-      `Manacost-Labs/hearthstone-deckstrings-php`, not the monorepo root.
-- [ ] The reviewed, SHA-pinned PHP mirror sync workflow is installed in the
-      distribution repository and can run manually and hourly.
+- [ ] Packagist tracks the root package manifest in
+      `Manacost-Labs/deckstrings` and exposes the expected `dev-main` source.
+- [ ] The Packagist update policy is recorded: manual update after the release
+      workflow, or an accepted automatic-update partial-release risk.
 
 ## Before publishing
 
@@ -60,7 +60,8 @@ Release workflow run: `________________`
 - [ ] PyPI OIDC publish completed; wheel, sdist, and attestations are visible.
 - [ ] NuGet OIDC publish completed; package and symbols were accepted.
 - [ ] GitHub release artifacts, checksums, and attestations are present.
-- [ ] PHP mirror has the same `vX.Y.Z` tag and exported package contents.
+- [ ] Packagist source reference matches the `Manacost-Labs/deckstrings`
+      `vX.Y.Z` tag commit.
 - [ ] Packagist exposes `manacost-labs/hearthstone-deckstrings` version `X.Y.Z`.
 
 ## Fresh consumer smoke
@@ -81,8 +82,7 @@ Release workflow run: `________________`
 ## Completion boundary
 
 - [ ] The release is declared complete only after all four registry versions,
-      the PHP mirror tag, provenance/attestations, and fresh consumer smoke tests
-      are verified.
+      provenance/attestations, and fresh consumer smoke tests are verified.
 - [ ] Links to registry pages, workflow run, checksums, and any exception are
       recorded in the release issue or operational log.
 
