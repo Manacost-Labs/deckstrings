@@ -76,6 +76,87 @@ public sealed class DeckstringsTests
     }
 
     [Fact]
+    public void DeckTransportUsesCanonicalSharedTupleShapeAndRoundTrips()
+    {
+        var deck = new Deck { Format = DeckFormat.Wild };
+        deck.Heroes.Add(10);
+        deck.Heroes.Add(2);
+        deck.Cards.Add(new DeckCard(4, 1));
+        deck.Cards.Add(new DeckCard(3, 2));
+        deck.SideboardCards.Add(new SideboardCard(7, 1, 10));
+        deck.SideboardCards.Add(new SideboardCard(6, 2, 2));
+
+        var transport = Deckstrings.ToTransport(deck);
+
+        Assert.Equal(1, transport.Format);
+        Assert.Equal(new[] { 2, 10 }, transport.Heroes);
+        Assert.Equal(
+            new[] { (3, 2), (4, 1) },
+            transport.Cards.Select(card => (card[0], card[1])));
+        Assert.Equal(
+            new[] { (6, 2, 2), (7, 1, 10) },
+            transport.SideboardCards.Select(card => (card[0], card[1], card[2])));
+
+        var restored = Deckstrings.FromTransport(transport);
+        Assert.Equal(new[] { 2, 10 }, restored.Heroes);
+        Assert.Equal(new[] { (3, 2), (4, 1) }, restored.Cards.Select(CardTuple));
+        Assert.Equal(
+            new[] { (6, 2, 2), (7, 1, 10) },
+            restored.SideboardCards.Select(SideboardTuple));
+    }
+
+    [Fact]
+    public void FromTransportRejectsMalformedTupleWithStableCode()
+    {
+        var transport = new DeckTransport
+        {
+            Format = 1,
+            Heroes = new[] { 7 },
+            Cards = new[] { new[] { 1, 2, 3 } },
+            SideboardCards = Array.Empty<int[]>(),
+        };
+
+        var error = Assert.Throws<DeckstringException>(
+            () => Deckstrings.FromTransport(transport));
+
+        Assert.Equal(DeckstringErrorCodes.InvalidDeck, error.ErrorCode);
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void FromTransportRejectsMissingRequiredCardCollection(bool omitCards)
+    {
+        var transport = new DeckTransport
+        {
+            Format = 1,
+            Heroes = new[] { 7 },
+            Cards = omitCards ? null! : Array.Empty<int[]>(),
+            SideboardCards = omitCards ? Array.Empty<int[]>() : null!,
+        };
+
+        var error = Assert.Throws<DeckstringException>(
+            () => Deckstrings.FromTransport(transport));
+
+        Assert.Equal(DeckstringErrorCodes.InvalidDeck, error.ErrorCode);
+    }
+
+    [Fact]
+    public void ValidationTransportPreservesSharedFields()
+    {
+        var deck = ValidDeck();
+        deck.Cards.Add(new DeckCard(1, 0));
+
+        var transport = Deckstrings.ToTransport(Deckstrings.Validate(deck));
+
+        Assert.False(transport.Valid);
+        var error = Assert.Single(transport.Errors);
+        Assert.Equal(DeckstringErrorCodes.InvalidCount, error.Code);
+        Assert.Equal("cards[0][1]", error.Path);
+        Assert.False(string.IsNullOrWhiteSpace(error.Message));
+    }
+
+    [Fact]
     public void ParseExportRejectsOversizedUtf8Text()
     {
         var error = Assert.Throws<DeckstringException>(

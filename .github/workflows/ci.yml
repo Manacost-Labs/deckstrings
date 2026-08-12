@@ -204,6 +204,17 @@ jobs:
         run: dotnet run --project packages/dotnet/tests/ManacostLabs.Deckstrings.Compatibility/ManacostLabs.Deckstrings.Compatibility.csproj --configuration Release -- fixtures/deckstrings.json
       - name: Pack NuGet and symbols packages
         run: dotnet pack packages/dotnet/src/ManacostLabs.Deckstrings/ManacostLabs.Deckstrings.csproj --configuration Release --no-build
+      - name: Build ASP.NET example against the packed package
+        run: |
+          package_version="$(dotnet msbuild packages/dotnet/src/ManacostLabs.Deckstrings/ManacostLabs.Deckstrings.csproj -getProperty:Version -verbosity:quiet | tail -1)"
+          package_source="${GITHUB_WORKSPACE}/packages/dotnet/src/ManacostLabs.Deckstrings/bin/Release"
+          dotnet restore examples/dotnet/aspnet/DeckstringsApi.csproj \
+            --source "${package_source}" \
+            -p:DeckstringsPackageVersion="${package_version}"
+          dotnet build examples/dotnet/aspnet/DeckstringsApi.csproj \
+            --configuration Release \
+            --no-restore \
+            -p:DeckstringsPackageVersion="${package_version}"
       - name: Install the built package in clean consumers
         run: |
           package_version="$(dotnet msbuild packages/dotnet/src/ManacostLabs.Deckstrings/ManacostLabs.Deckstrings.csproj -getProperty:Version -verbosity:quiet | tail -1)"

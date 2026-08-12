@@ -37,10 +37,15 @@ jobs:
         id: source
         env:
           RELEASE_TAG: ${{ github.event.release.tag_name }}
+          RELEASE_PRERELEASE: ${{ github.event.release.prerelease }}
         run: |
           set -euo pipefail
           python scripts/check_versions.py
           if [[ -n "${RELEASE_TAG}" ]]; then
+            if [[ "${RELEASE_PRERELEASE}" == "true" ]]; then
+              echo "Stable package publication cannot run from a prerelease." >&2
+              exit 1
+            fi
             python scripts/check_versions.py --tag "${RELEASE_TAG}"
           fi
           echo "sha=$(git rev-parse HEAD)" >> "${GITHUB_OUTPUT}"
@@ -489,8 +494,7 @@ jobs:
           test "${#packages[@]}" -eq 1
           dotnet nuget push "${packages[0]}" \
             --api-key "${NUGET_API_KEY}" \
-            --source https://api.nuget.org/v3/index.json \
-            --skip-duplicate
+            --source https://api.nuget.org/v3/index.json
 
   attach-release-assets:
     name: Attach GitHub release assets
