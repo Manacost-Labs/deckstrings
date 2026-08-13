@@ -7,6 +7,14 @@ on:
         description: Existing draft release tag to stage after verification (leave empty for a dry-run)
         required: false
         type: string
+      release_tag:
+        description: Existing immutable release tag for an npm-only replay
+        required: false
+        type: string
+      publish_existing_npm_release:
+        description: Publish npm from an existing immutable release (requires release_tag)
+        required: false
+        type: boolean
   release:
     types:
       - published
@@ -15,7 +23,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: release-${{ github.event.release.tag_name || inputs.draft_tag || github.ref }}
+  group: release-${{ github.event.release.tag_name || inputs.release_tag || inputs.draft_tag || github.ref }}
   cancel-in-progress: false
 
 jobs:
@@ -32,7 +40,7 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: ${{ github.event.release.tag_name || github.sha }}
+          ref: ${{ github.event.release.tag_name || inputs.release_tag || github.sha }}
           fetch-depth: 0
 
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
@@ -42,10 +50,15 @@ jobs:
       - name: Verify versions and capture source revision
         id: source
         env:
-          RELEASE_TAG: ${{ github.event.release.tag_name || inputs.draft_tag }}
-          RELEASE_PRERELEASE: ${{ github.event.release.prerelease }}
+          RELEASE_TAG: ${{ github.event.release.tag_name || inputs.release_tag || inputs.draft_tag }}
+          RELEASE_PRERELEASE: ${{ github.event.release.prerelease || 'false' }}
+          REPLAY_EXISTING_NPM: ${{ inputs.publish_existing_npm_release }}
         run: |
           set -euo pipefail
+          if [[ "${REPLAY_EXISTING_NPM}" == "true" && -z "${RELEASE_TAG}" ]]; then
+            echo "npm replay requires release_tag." >&2
+            exit 1
+          fi
           python scripts/check_versions.py
           if [[ -n "${RELEASE_TAG}" ]]; then
             if [[ "${RELEASE_PRERELEASE}" == "true" ]]; then
@@ -59,15 +72,16 @@ jobs:
           echo "tag=${RELEASE_TAG}" >> "${GITHUB_OUTPUT}"
 
       - name: Verify release commit and required CI
-        if: github.event_name == 'release' || inputs.draft_tag != ''
+        if: github.event_name == 'release' || inputs.draft_tag != '' || inputs.publish_existing_npm_release
         env:
           GH_TOKEN: ${{ github.token }}
+          REPLAY_EXISTING_NPM: ${{ inputs.publish_existing_npm_release }}
         run: |
           set -euo pipefail
           release_sha="$(git rev-parse HEAD)"
           git fetch --no-tags origin main:refs/remotes/origin/main
           main_sha="$(git rev-parse refs/remotes/origin/main)"
-          if [[ "${GITHUB_EVENT_NAME}" == "release" ]]; then
+          if [[ "${GITHUB_EVENT_NAME}" == "release" || "${REPLAY_EXISTING_NPM}" == "true" ]]; then
             if ! git merge-base --is-ancestor "${release_sha}" "${main_sha}"; then
               echo "Published release commit ${release_sha} is not on main." >&2
               exit 1
@@ -125,7 +139,7 @@ jobs:
 
   build-npm:
     name: Build npm artifact
-    if: github.event_name == 'workflow_dispatch'
+    if: github.event_name == 'workflow_dispatch' && !inputs.publish_existing_npm_release
     needs: verify
     runs-on: ubuntu-latest
     steps:
@@ -154,7 +168,7 @@ jobs:
 
   build-python:
     name: Build Python artifact
-    if: github.event_name == 'workflow_dispatch'
+    if: github.event_name == 'workflow_dispatch' && !inputs.publish_existing_npm_release
     needs: verify
     runs-on: ubuntu-latest
     steps:
@@ -194,7 +208,7 @@ jobs:
 
   build-nuget:
     name: Build NuGet artifacts
-    if: github.event_name == 'workflow_dispatch'
+    if: github.event_name == 'workflow_dispatch' && !inputs.publish_existing_npm_release
     needs: verify
     runs-on: ubuntu-latest
     steps:
@@ -232,7 +246,7 @@ jobs:
 
   test-composer:
     name: Test Composer package
-    if: github.event_name == 'workflow_dispatch'
+    if: github.event_name == 'workflow_dispatch' && !inputs.publish_existing_npm_release
     needs: verify
     runs-on: ubuntu-latest
     steps:
@@ -265,7 +279,7 @@ jobs:
 
   build-composer:
     name: Build Composer artifact
-    if: github.event_name == 'workflow_dispatch'
+    if: github.event_name == 'workflow_dispatch' && !inputs.publish_existing_npm_release
     needs:
       - verify
       - test-composer
@@ -345,7 +359,7 @@ jobs:
 
   assemble:
     name: Assemble release artifacts
-    if: github.event_name == 'workflow_dispatch'
+    if: github.event_name == 'workflow_dispatch' && !inputs.publish_existing_npm_release
     needs:
       - verify
       - build-npm
@@ -414,7 +428,7 @@ jobs:
 
   attest:
     name: Attest release artifacts
-    if: github.event_name == 'workflow_dispatch'
+    if: github.event_name == 'workflow_dispatch' && !inputs.publish_existing_npm_release
     needs: assemble
     runs-on: ubuntu-latest
     permissions:
@@ -621,7 +635,7 @@ jobs:
 
   verify-published-assets:
     name: Verify immutable published release assets
-    if: github.event_name == 'release'
+    if: github.event_name == 'release' || inputs.publish_existing_npm_release
     needs: verify
     runs-on: ubuntu-latest
     permissions:
@@ -719,7 +733,7 @@ jobs:
 
   publish-npm:
     name: Publish npm
-    if: github.event_name == 'release'
+    if: github.event_name == 'release' || inputs.publish_existing_npm_release
     needs:
       - verify
       - verify-published-assets
@@ -751,7 +765,7 @@ jobs:
           package-manager-cache: false
       - name: Install OIDC-capable npm CLI
         run: npm install --global npm@11.6.2
-      - run: npm publish artifacts/*.tgz --access public
+      - run: npm publish "$(find artifacts -maxdepth 1 -type f -name '*.tgz' -print -quit)" --access public
 
   publish-pypi:
     name: Publish PyPI
