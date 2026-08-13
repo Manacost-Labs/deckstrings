@@ -13,10 +13,9 @@ TypeScript, PHP, Python, and .NET. All four implementations share one public
 contract and the same golden fixtures, including sideboards and full clipboard
 exports.
 
-> **Release status:** `1.0.0` is a verified release candidate. The synchronized
-> stable packages are not public in all four registries yet, so the install
-> commands below become the supported production path only after the public
-> `v1.0.0` release is published.
+> **Release status:** `1.0.0` is the first stable cross-language release and is
+> publicly available on npm, Packagist, PyPI, and NuGet. The install commands
+> below are the supported production path.
 
 ## Install
 
