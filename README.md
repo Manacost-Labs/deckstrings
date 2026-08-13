@@ -1,9 +1,9 @@
-# Manacost Labs Hearthstone Deckstrings
+# Hearthstone Deckstrings
 
 [![CI](https://github.com/Manacost-Labs/deckstrings/actions/workflows/ci.yml/badge.svg)](https://github.com/Manacost-Labs/deckstrings/actions/workflows/ci.yml)
 [![CodeQL](https://github.com/Manacost-Labs/deckstrings/actions/workflows/codeql.yml/badge.svg)](https://github.com/Manacost-Labs/deckstrings/actions/workflows/codeql.yml)
 [![npm](https://img.shields.io/npm/v/@manacost-labs/deckstrings)](https://www.npmjs.com/package/@manacost-labs/deckstrings)
-[![PyPI](https://img.shields.io/pypi/v/manacost-deckstrings)](https://pypi.org/project/manacost-deckstrings/)
+[![PyPI](https://img.shields.io/pypi/v/manacost-deckstrings.svg?label=PyPI&logo=python&cacheSeconds=3600)](https://pypi.org/project/manacost-deckstrings/)
 [![NuGet](https://img.shields.io/nuget/v/ManacostLabs.Deckstrings)](https://www.nuget.org/packages/ManacostLabs.Deckstrings)
 [![Packagist](https://img.shields.io/packagist/v/manacost-labs/hearthstone-deckstrings)](https://packagist.org/packages/manacost-labs/hearthstone-deckstrings)
 [![License: ISC](https://img.shields.io/badge/license-ISC-blue.svg)](LICENSE)
